@@ -127,6 +127,10 @@ commit as the code:
 - A contract or module boundary changed → `docs/ARCHITECTURE.md`
 - A decision changed → new ADR + banner on the old one + `docs/adr/README.md`
 - Work completed or a gap found → `docs/BACKLOG.md`
+- A decision superseded a `docs/research/` recommendation → add a banner at the head
+  of that section. The file is append-only, so a banner is the sanctioned repair —
+  editing the body destroys the citation trail. An unmarked superseded
+  recommendation is the most dangerous artefact in the repo: it reads as current.
 
 At the end of a session that produced reversals, non-obvious bugs, or tooling
 surprises, append an entry to `docs/history/` and add any new gotcha to

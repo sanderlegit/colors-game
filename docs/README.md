@@ -31,7 +31,7 @@ document in one hop instead of grepping.
 | `ARCHITECTURE.md` | Module boundaries and the type contracts every task builds against. | Yes — update in the same commit as the code |
 | `BACKLOG.md` | Delivery plan, known gaps, risk register. | Yes |
 | `adr/` | Decisions and their consequences. | **No — immutable. Supersede instead.** |
-| `research/` | Cited color science with VERIFIED / UNVERIFIED marked. | Append-only |
+| `research/` | Cited color science with VERIFIED / UNVERIFIED marked. | Append-only — when a decision supersedes a section, add a **banner at its head**; never edit the body |
 | `history/` | What actually happened, session by session. | Append-only |
 | `TUNING.md` | Every knob, what it does, where it lives. | Yes |
 | `player-guide.md` | Player-facing explanation of scoring. | Yes |
