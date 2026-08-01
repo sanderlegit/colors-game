@@ -48,8 +48,13 @@ color generation testable in milliseconds and reproducible from a seed — see
 
 ## Reading order
 
+Start at **`docs/README.md`** — it is the map, and routes you to the right
+document in one hop.
+
 1. `docs/SPEC.md` — what the game is and why it's shaped this way
 2. `docs/ARCHITECTURE.md` — module boundaries and the core contracts
-3. `docs/adr/` — the decisions and their consequences
+3. `docs/adr/README.md` — the decision log, including what was tried and rejected
 4. `CLAUDE.md` — the working agreement for agents in this repo
-5. `docs/BACKLOG.md` — the delivery plan
+5. `docs/BACKLOG.md` — the delivery plan and known gaps
+6. `docs/history/` — what actually happened, and the environment traps
+7. `docs/player-guide.md` — how scoring works, in player-facing terms

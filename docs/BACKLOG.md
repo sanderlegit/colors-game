@@ -35,7 +35,7 @@ Every item's exit criteria include `npm run verify` green.
 |---|------|---------|---------------|
 | 2.1 | `src/platform/*` — rAF clock, storage, seed source | 1.8 | Adapters swappable; in-memory doubles used in tests |
 | 2.2 | `src/ui/swatch.ts` — the shared grid cell + dissolve | 1.8 | Both layers share one grid cell; reduced-motion path collapses duration to 0 |
-| 2.3 | `src/ui/picker.ts` — canvas plane + hue slider, pointer + keyboard | 2.2 | Pointer capture works for mouse/touch/pen; arrow keys nudge; gradient repaints only on hue change |
+| 2.3 | `src/ui/picker.ts` — canvas plane + bar, pointer + keyboard | 2.2 | Pointer capture works for mouse/touch/pen; arrow keys nudge; plane repaints only on lightness change (ADR 0007) |
 | 2.4 | `src/ui/preview.ts` — live guess + numeric readout | 1.8 | Updates during drag |
 | 2.5 | `src/ui/hud.ts` — countdown, round counter, confirm | 1.8 | Confirm disabled until first move |
 | 2.6 | `src/ui/reveal.ts` — target vs guess, ΔE, score | 1.7 | Shows raw ΔE alongside score |

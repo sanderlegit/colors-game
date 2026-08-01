@@ -24,7 +24,10 @@ import { type Oklch, oklch } from "@/color/types";
  *
  * That makes this test deliberately stricter than "would render identically
  * after rounding to a byte". A colour whose channel sits at −0.001 does display
- * as 0, but it is out of gamut, and the picker's inert region should say so.
+ * as 0, but it is out of gamut and this says so. Erring strict is the safe
+ * direction: `maxChroma` is the ceiling the picker plane and target generation
+ * are both built on (ADR 0007), so under-reporting it costs a sliver of chroma
+ * while over-reporting it would put unreachable colours in play.
  * The consequence is a slightly smaller `maxChroma` at low lightness than the
  * research doc's table reports — see the note on `MAX_CHROMA_TABLE`.
  */

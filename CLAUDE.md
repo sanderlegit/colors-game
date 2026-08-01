@@ -3,6 +3,26 @@
 Read `docs/SPEC.md` and `docs/ARCHITECTURE.md` before writing code. They are the
 source of truth; this file is how you work.
 
+## Finding things
+
+`docs/README.md` is the map — it routes you to the right document in one hop.
+Do not go spelunking; the answer is almost certainly already written down.
+
+Before you start, in order of how often it saves you:
+
+| Situation | Go to |
+|-----------|-------|
+| About to propose an approach | `docs/adr/README.md` § Already rejected. Twelve ideas in there look obviously right and are not. |
+| Touching `src/color/**` | `docs/research/color-science.md`. Constants and test vectors are cited there — **never re-derive them from memory or fetch alternatives**. |
+| Hit a baffling tooling or test failure | `docs/history/README.md` § Environment traps. happy-dom dropping `oklch()`, TS 7 removing `baseUrl`, and swallowed `console.log` are all in there. |
+| Wondering why the code is shaped this way | `docs/adr/README.md`, then `docs/history/`. |
+| Looking for work | `docs/BACKLOG.md` § Known gaps. |
+
+Two decisions have already been reversed after playtesting (ADR 0005→0007,
+0006→0008). The superseded ADRs are kept deliberately — the reasoning that turned
+out to be wrong is the most useful thing in the log. Read both halves before
+re-litigating either.
+
 ## The one command
 
 ```
@@ -82,7 +102,35 @@ is not a reason.
 Anything architectural, any new dependency, any deviation from this file: write an
 ADR in `docs/adr/NNNN-title.md` using the existing ones as the template. ADRs are
 short — context, decision, consequences. They are immutable once merged;
-supersede rather than edit.
+supersede rather than edit, and add a superseded banner to the old one's status
+line. Add the row to `docs/adr/README.md` in the same commit.
+
+When you overrule a measured effect on judgement or feel, **write down what you
+are accepting and how you would detect it later**. ADR 0008 is the worked example:
+the afterimage bias it accepts is invisible, so the ADR says where to look if
+scores ever skew.
+
+## Keeping the docs true
+
+Documentation that drifts is worse than none, because it is trusted. In the same
+commit as the code:
+
+- Behaviour changed → `docs/SPEC.md`
+- A contract or module boundary changed → `docs/ARCHITECTURE.md`
+- A decision changed → new ADR + banner on the old one + `docs/adr/README.md`
+- Work completed or a gap found → `docs/BACKLOG.md`
+
+At the end of a session that produced reversals, non-obvious bugs, or tooling
+surprises, append an entry to `docs/history/` and add any new gotcha to
+`docs/history/README.md` § Environment traps. History is append-only: if an older
+entry turns out to be wrong, say so in the new one rather than editing it.
+
+Before claiming a doc is current, grep for stale references — file renames and
+superseded decisions leave dangling mentions:
+
+```
+grep -rn "<old name>" docs/ src/ e2e/ CLAUDE.md README.md
+```
 
 ## Scope discipline
 
