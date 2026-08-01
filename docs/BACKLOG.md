@@ -7,7 +7,7 @@ parallel.
 
 Every item's exit criteria include `npm run verify` green.
 
-## Phase 0 — foundation (done / in flight)
+## Phase 0 — foundation ✅
 
 | # | Item | Exit criteria |
 |---|------|---------------|
@@ -16,7 +16,7 @@ Every item's exit criteria include `npm run verify` green.
 | 0.3 | Color-science research: metric, curve, conversion math, test vectors | `docs/research/*.md` with cited values |
 | 0.4 | Purity guard test | `tests/purity.test.ts` fails on a planted violation |
 
-## Phase 1 — the pure core (parallelizable, no UI)
+## Phase 1 — the pure core ✅
 
 | # | Item | Depends | Exit criteria |
 |---|------|---------|---------------|
@@ -29,7 +29,7 @@ Every item's exit criteria include `npm run verify` green.
 | 1.7 | `src/domain/scoring.ts` — ΔE → 0..100 curve | 1.2 | Invariants: identity=100, bounded, monotonic, symmetric |
 | 1.8 | `src/domain/state.ts` — `reduce`, total, timer transition in-domain | 1.6, 1.7 | Every (phase × event) pair covered incl. illegal ones; 5s transition tested with two timestamps, no waiting |
 
-## Phase 2 — the shell
+## Phase 2 — the shell ✅
 
 | # | Item | Depends | Exit criteria |
 |---|------|---------|---------------|
@@ -44,13 +44,39 @@ Every item's exit criteria include `npm run verify` green.
 
 ## Phase 3 — proving it
 
-| # | Item | Depends | Exit criteria |
-|---|------|---------|---------------|
-| 3.1 | E2E geometry assertion: picker box == swatch box within 1px | 2.7 | Green on Desktop Chrome and iPhone 14 projects |
-| 3.2 | E2E happy path + no-target-in-DOM check | 2.7 | Green on both projects |
-| 3.3 | Keyboard-only playthrough, visible focus, reduced motion | 2.7 | Manual pass logged + e2e where automatable |
-| 3.4 | Real-device pass over LAN dev server | 2.8 | Signed off manually |
-| 3.5 | Perf budget check: bundle ≤30KB gz, repaint ≤4ms @2× | 2.7 | Measured, recorded in the PR |
+| # | Item | Status |
+|---|------|--------|
+| 3.1 | E2E geometry assertion | ✅ Green on both projects. Caught a real bug — see below. |
+| 3.2 | E2E happy path + no-target-in-DOM | ✅ Full round plays through on both projects. |
+| 3.3 | Keyboard-only playthrough, visible focus, reduced motion | ⬜ **Not done.** Unit-tested; needs a manual keyboard-only pass. |
+| 3.4 | Real-device pass over LAN dev server | ⬜ **Not done.** Needs a physical iPhone; the loupe and take-off selection cannot be validated in an emulated viewport. |
+| 3.5 | Perf budget: bundle ≤30KB gz, repaint ≤4ms @2× | ⚠️ Bundle ✅ **9.6 KB gz**. Repaint ❌ **11ms** final / 6.7ms draft at 800×700 — over the 4ms budget. |
+
+### What 3.1 caught
+
+The geometry assertion found a defect that no unit test could: at iPhone width the
+HUD reflowed between `memorize` and `picking` (44px → 73px as the confirm button
+appeared and wrapped), pushing the stage down ~15px. The picker and swatch were
+pixel-identical to each other the whole time — the *page* moved underneath them,
+so the rect the player memorized was not the rect the picker appeared in.
+
+Fixed by reserving the HUD's box at its tallest arrangement. The spec now asserts
+both guarantees separately: picker-vs-swatch (holds by construction) and
+memorized-rect-vs-picker (does not, and needs the test).
+
+### Known gaps
+
+- **Repaint budget missed** (3.5). The floor is the per-pixel buffer fill, not the
+  colour sampling; getting under 4ms would need a gamma LUT plus lattice
+  interpolation. Measure on real hardware before optimising — 11ms only occurs on
+  hue change, never during a plane drag.
+- **Difficulty tiers are unreachable.** `generateTarget` accepts a `Difficulty`,
+  but `createReducer` calls `deps.target(seed, roundIndex)`, so every game plays
+  `normal`. Wiring it needs a field on `Settings` and a control in the menu.
+- **`src/platform/seed.ts` has no tests** (0% coverage). The platform layer has no
+  floor, but this is a real gap rather than a decision.
+- **Settings UI does not exist.** SPEC §8 promises a 3s/5s/8s memorize choice;
+  storage and the reducer both support it, nothing surfaces it.
 
 ## Deliberately deferred
 

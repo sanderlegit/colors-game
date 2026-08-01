@@ -192,8 +192,18 @@ p {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* The HUD swaps a countdown for a confirm button between phases, and at phone
+   widths that reflow changed its height and pushed the stage down ~15px. The
+   player memorized a rect at a position; the picker has to appear at that same
+   position, so the HUD's box is reserved at its tallest arrangement — one
+   control row plus one line of hint — and never resized by its contents.
+   Asserted in e2e: the swatch rect is identical in memorize and picking. */
 .game-hud {
   grid-area: hud;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: calc(var(--tap-target) + 1lh + var(--space-2));
 }
 
 .game-stage {
