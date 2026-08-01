@@ -82,17 +82,20 @@ panel's reserved slots. These are CSS, not TypeScript constants:
 |------|-------|----:|-------|
 | `--color-target` | `:root` (+ dark override) | `#e5484d` / `#ff6369` | The reticle red and the tint on the "Target" readout column. Change both or the two drift apart. |
 | `.picker-target` size | `.picker-target` | 26px | The plane reticle. Deliberately larger than the 22px `.picker-cursor` so it frames the guess when they coincide. |
-| `.reveal-chip` height (phone) | `@media (max-width: 639px)` | 4rem | The phone comparison-blob height. Taller reads better; the three levers below trade off against it to keep everything on one screen with no scroll (SPEC §4). |
-| `--swatch-size` (phone) | `@media (max-width: 639px)` on `.game` | `min(64vw, 42vh)` | The picker is smaller on a phone (desktop is `min(70vw, 50vh)`) because it moves to the thumb zone and the room pays for the taller blobs. Enlarging it is what pushes the layout past the fold first. |
+| `.reveal-chip` height (phone) | `@media (max-width: 639px)` | 4rem | The phone comparison-blob height. Taller reads better; it trades off against the picker's height, since the picker takes whatever vertical space is left. |
 | `.game` padding (phone) | `@media (max-width: 639px)` | `--space-2` | Tightened from `--space-3` to buy the last few pixels of vertical fit. |
 
 The panel is inline in the side region — result elements are laid out in every
 phase and only their `visibility` flips on reveal, which is what keeps the reveal
 from shifting anything (ADR 0010). At phone widths the layout reorders to
-`side → hud → stage`, putting the picker at the bottom (thumb zone) with the
-confirm button right above it; the ΔE prose is `display: none` so the panel fits.
-If you retune the phone blob height, swatch size or padding, re-check the "swatch
-and side panel both on screen without scrolling" e2e at the iPhone 14 viewport.
+`side → hud → stage` (`grid-template-rows: auto auto 1fr`), putting the picker at
+the bottom (thumb zone) with the confirm button right above it. There the swatch
+drops its 1:1 aspect ratio and fills the stage cell — **full width**, remaining
+height — so the plane and lightness bar span the screen; the fill and picker
+share that element, so the dissolve still lands on the same rect. The ΔE prose is
+`display: none` so it all fits. If you retune the phone blob height or padding,
+re-check the "swatch and side panel both on screen without scrolling" e2e at the
+iPhone 14 viewport.
 
 ## Things that are not knobs
 
