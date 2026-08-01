@@ -30,5 +30,8 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts"]
+  /* `*.node.test.ts` files inspect the repo from the filesystem and are typed by
+     tsconfig.node.json instead — they are tooling, not browser code. */
+  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts"],
+  "exclude": ["tests/**/*.node.test.ts"]
 }
