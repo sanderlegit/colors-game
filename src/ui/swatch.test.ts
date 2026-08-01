@@ -145,7 +145,7 @@ describe("createSwatch", () => {
     expect(fill.getAttribute("style")).toBe(before);
   });
 
-  it("fades back to the target on reveal and takes interactivity away first", () => {
+  it("keeps the picker visible but read-only on reveal (ADR 0009)", () => {
     const root = mount();
     const swatch = createSwatch(root);
     const fill = must(root.querySelector<HTMLElement>(".swatch-fill"));
@@ -154,9 +154,28 @@ describe("createSwatch", () => {
     vi.advanceTimersByTime(DISSOLVE_MS);
     swatch.update(stateWith({ phase: "reveal", target: TARGET }));
 
+    // The score screen annotates the picker in place, so it stays up — but the
+    // player can no longer move it, and the target is not shown as a flat fill.
+    expect(swatch.pickerSlot.style.opacity).toBe("1");
     expect(swatch.pickerSlot.style.pointerEvents).toBe("none");
+    expect(fillColor(fill)).toBe("");
+    expect(root.innerHTML).not.toContain("oklch");
+  });
+
+  it("fades back to the next target when the next round begins", () => {
+    const root = mount();
+    const swatch = createSwatch(root);
+    const fill = must(root.querySelector<HTMLElement>(".swatch-fill"));
+    const NEXT_TARGET = oklch(0.4, 0.1, 30);
+
+    swatch.update(stateWith({ phase: "picking", target: TARGET }));
+    vi.advanceTimersByTime(DISSOLVE_MS);
+    swatch.update(stateWith({ phase: "reveal", target: TARGET }));
+    swatch.update(stateWith({ phase: "memorize", target: NEXT_TARGET }));
+
+    expect(fillColor(fill)).toBe(oklchToCss(NEXT_TARGET));
+    expect(fill.style.opacity).toBe("1");
     expect(swatch.pickerSlot.style.opacity).toBe("0");
-    expect(fillColor(fill)).toBe(oklchToCss(TARGET));
   });
 
   it("removes its nodes and pending timers on destroy", () => {

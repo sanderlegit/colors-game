@@ -15,10 +15,15 @@
  * The dissolve is a single cross-fade straight into the picker (ADR 0008). It
  * passed through a neutral mask for a while — see ADR 0006 for the afterimage
  * argument and ADR 0008 for why the feel cost outweighed it.
+ *
+ * The picker stays visible through `reveal` (ADR 0009): the score screen marks
+ * where the target sat *on the picker the player was just using*, so the swatch
+ * does not fade back to a flat target fill. `reveal` keeps the picker layer up
+ * but takes its `pointer-events` away — it is a read-only annotated view there.
  */
 
 import { oklchToCss } from "@/color/format";
-import type { GameState } from "@/domain/state";
+import type { GameState, Phase } from "@/domain/state";
 
 /** SPEC §8 / ARCHITECTURE: the dissolve is 450ms, or 0 under reduced motion. */
 export const DISSOLVE_MS = 450;
@@ -91,6 +96,7 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
 
   let renderedMode: Mode | null = null;
   let renderedFill: string | null = null;
+  let renderedPhase: Phase | null = null;
   let interactive = false;
   let fadeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -106,6 +112,7 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
     pickerSlot.style.pointerEvents = next ? "auto" : "none";
   }
 
+  /** Drop the target fill and hand the gesture to the picker. Picking only. */
   function completeDissolve(): void {
     fadeTimer = undefined;
     // The target must not be readable from the DOM once picking is live
@@ -115,8 +122,14 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
     setInteractive(true);
   }
 
+  /** The picker is visible while the player picks and while they read the score. */
+  function pickerVisible(phase: Phase): boolean {
+    return phase === "picking" || phase === "reveal";
+  }
+
   function update(state: GameState): void {
-    const mode: Mode = state.phase === "picking" ? "picker" : "fill";
+    const phase = state.phase;
+    const mode: Mode = pickerVisible(phase) ? "picker" : "fill";
     const duration =
       options.reducedMotion === true || state.settings.reducedMotion ? 0 : configuredDuration;
 
@@ -128,25 +141,41 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
       }
     }
 
-    if (mode === renderedMode) return;
-    renderedMode = mode;
+    const phaseChanged = phase !== renderedPhase;
+    renderedPhase = phase;
 
-    clearFadeTimer();
-    // Off for the whole transition in both directions.
-    setInteractive(false);
+    if (mode !== renderedMode) {
+      renderedMode = mode;
 
-    stack.dataset.mode = mode;
-    stack.style.setProperty("--dissolve-duration", `${duration}ms`);
+      clearFadeTimer();
+      // Off for the whole transition in both directions.
+      setInteractive(false);
 
-    fill.style.opacity = mode === "picker" ? "0" : "1";
-    pickerSlot.style.opacity = mode === "picker" ? "1" : "0";
+      stack.dataset.mode = mode;
+      stack.style.setProperty("--dissolve-duration", `${duration}ms`);
 
-    if (mode !== "picker") return;
-    if (duration === 0) {
-      completeDissolve();
+      fill.style.opacity = mode === "picker" ? "0" : "1";
+      pickerSlot.style.opacity = mode === "picker" ? "1" : "0";
+
+      if (mode !== "picker") return;
+      if (phase === "picking") {
+        // Fading in for a live pick: hand over the gesture once it settles.
+        if (duration === 0) completeDissolve();
+        else fadeTimer = setTimeout(completeDissolve, duration);
+      } else {
+        // Straight into reveal without a prior pick (only reachable in tests):
+        // show the picker but keep it read-only.
+        setFillColor(fill, "");
+        renderedFill = null;
+      }
       return;
     }
-    fadeTimer = setTimeout(completeDissolve, duration);
+
+    // Mode is unchanged. The transition that matters here is picking↔reveal —
+    // both are "picker" — where reveal makes the picker a read-only annotation.
+    if (phaseChanged && mode === "picker") {
+      setInteractive(phase === "picking");
+    }
   }
 
   function destroy(): void {
