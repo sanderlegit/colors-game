@@ -34,6 +34,11 @@
   --color-surface: #ffffff;
   --color-border: #d4d4d8;
 
+  /* ADR 0009: the reveal reticle marking where the target sat. Red so it reads
+     as "here, not there" against the picker's own colours; paired with text
+     labels so it is never colour alone (SPEC §8). */
+  --color-target: #e5484d;
+
   /* The dissolve (SPEC §2.1). JS overrides this per-element and collapses it to
      0ms under reduced motion; the value here is only the default. */
   --dissolve-duration: 450ms;
@@ -61,6 +66,7 @@
     --color-muted: #9ca3af;
     --color-surface: #17171d;
     --color-border: #33333d;
+    --color-target: #ff6369;
   }
 }
 
@@ -182,7 +188,10 @@ p {
   min-height: 100dvh;
   gap: var(--space-3);
   padding: var(--space-3);
-  align-content: center;
+  /* Phones anchor to the top so the reveal card (a bottom sheet at this width,
+     ADR 0009) has room below the board instead of covering it. The position is
+     the same in every phase, so the memorize→picking geometry still holds. */
+  align-content: start;
   justify-items: center;
   grid-template-areas:
     "hud"
@@ -237,6 +246,9 @@ p {
       "result result";
     justify-items: stretch;
     align-items: center;
+    /* There is room to breathe here, and the reveal card floats to the side
+       rather than below, so the board can sit centred again. */
+    align-content: center;
     /* Centre the two column tracks rather than letting them spread to the
        viewport edges — on a wide monitor that left a dead gap between the
        picker and the preview it is meant to be read against. */
@@ -481,53 +493,76 @@ p {
   font-size: 0.875rem;
 }
 
-/* --- Reveal (SPEC §6) ---------------------------------------------------- */
+/* --- Reveal (SPEC §6, ADR 0009) ------------------------------------------ */
+
+/* No longer a full-bleed curtain: the score screen annotates the picker in place
+   (ADR 0009), so the result reads as a card that leaves the board visible. The
+   section spans the viewport only to position the card and is click-through; the
+   card itself is the only interactive surface. Reserving the card's height in the
+   grid instead does not fit a phone beside the swatch (history/0001), so it stays
+   an overlay. */
 .reveal {
   position: fixed;
   inset: 0;
   z-index: 3;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: var(--space-3);
-  padding: calc(var(--space-4) + var(--safe-top)) var(--space-3)
-    calc(var(--space-4) + var(--safe-bottom));
-  overflow-y: auto;
-  /* Opaque rather than a translucent scrim: the board behind it still shows the
-     target, and a half-visible picker competing with the result chips is noise
-     at the one moment the player is reading numbers. */
-  background-color: var(--color-bg);
+  display: flex;
+  /* Phone: the card sits at the bottom, board above it. */
+  align-items: flex-end;
+  justify-content: center;
+  padding: calc(var(--space-3) + var(--safe-top)) var(--space-3)
+    calc(var(--space-3) + var(--safe-bottom));
+  pointer-events: none;
 }
 
 .reveal[hidden] {
   display: none;
 }
 
-/* The panel itself, so the card reads as a card against the full-bleed backdrop. */
-.reveal-pair,
-.reveal-stats,
-.reveal-next {
-  max-width: min(100%, 32rem);
+.reveal-card {
+  display: grid;
+  gap: var(--space-3);
+  width: min(100%, 26rem);
+  max-height: 100%;
+  padding: var(--space-4);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 28%);
+  /* Only the card catches the pointer; taps outside it fall through to the inert
+     board rather than being swallowed by a transparent backdrop. */
+  pointer-events: auto;
 }
 
+/* Target and guess abut into one split rectangle so the difference reads
+   edge-to-edge, captions beneath. */
 .reveal-pair {
   display: flex;
-  gap: var(--space-3);
+  gap: 0;
 }
 
 .reveal-item {
   display: grid;
+  flex: 1;
   gap: var(--space-1);
   justify-items: center;
   font-size: 0.875rem;
 }
 
 .reveal-chip {
-  width: min(30vw, 8rem);
-  aspect-ratio: 1;
+  width: 100%;
+  aspect-ratio: 2 / 1;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
   background: var(--fill-color, transparent);
+}
+
+.reveal-item:first-child .reveal-chip {
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.reveal-item:last-child .reveal-chip {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 /* SPEC §6: the raw ΔE sits beside the score on purpose — hiding the input to the
@@ -556,6 +591,81 @@ p {
 .reveal-stat dd {
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+/* SPEC §8: your value against the target's, so the gap the reticle draws on the
+   picker is also legible as numbers — never colour alone. */
+.reveal-compare {
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal-compare-row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.reveal-compare-row dt {
+  color: var(--color-muted);
+}
+
+.reveal-compare-head {
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.reveal-compare-you {
+  font-weight: 600;
+}
+
+/* Tinted to tie the column to the red reticle on the picker; the header labels
+   carry the meaning without the colour (SPEC §8). */
+.reveal-compare-target {
+  font-weight: 600;
+  color: var(--color-target);
+}
+
+.reveal-explain {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+/* Phones: the card is a bottom sheet, so keep it short — the whole point is that
+   the annotated board above it stays visible. The split swatch becomes a strip
+   and the spacing tightens; it scrolls if it still cannot fit. */
+@media (max-width: 639px) {
+  .reveal-card {
+    gap: var(--space-2);
+    padding: var(--space-3);
+    max-height: 62dvh;
+  }
+
+  .reveal-chip {
+    aspect-ratio: auto;
+    height: 2.5rem;
+  }
+
+  .reveal-explain {
+    font-size: 0.75rem;
+  }
+}
+
+/* Desktop: the board sits left, so the card floats to the right of it rather
+   than at the bottom — the annotated picker stays fully in view. */
+@media (min-width: 640px) {
+  .reveal {
+    align-items: center;
+    justify-content: flex-end;
+    padding: var(--space-4) calc(var(--space-5) + var(--safe-right)) var(--space-4) var(--space-4);
+  }
 }
 
 /* --- Reduced motion (SPEC §8) -------------------------------------------- */
@@ -640,6 +750,50 @@ p {
   pointer-events: none;
 }
 
+/* ADR 0009: the reveal reticle. Same shape as the cursor but a red ring, a touch
+   larger so it frames the white cursor when the guess was close. Shown only on
+   the score screen; positioned inline exactly like the cursor. */
+.picker-target {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--color-target);
+  border-radius: 50%;
+  background: var(--fill-color, transparent);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 55%),
+    0 0 0 4px rgb(0 0 0 / 20%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.picker-target[hidden] {
+  display: none;
+}
+
+/* The gap from the guess to the target, drawn as a dashed vector across the
+   plane. `non-scaling-stroke` keeps the line 2px even though the viewBox is
+   stretched to the plane by `preserveAspectRatio: none`. */
+.picker-diff {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.picker-diff-line {
+  stroke: var(--color-target);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.85;
+}
+
 /* Vogel & Baudisch's Shift callout: a copy of the region the fingertip is
    covering, offset above the contact point. Touch only — a mouse cursor has a
    one-pixel hot spot and occludes nothing. */
@@ -698,4 +852,23 @@ p {
     0 0 0 1px rgb(0 0 0 / 55%),
     inset 0 0 0 1px rgb(0 0 0 / 25%);
   pointer-events: none;
+}
+
+/* ADR 0009: where the target's lightness sat, alongside the guess thumb, so the
+   lightness error is as visible as the hue/chroma error on the plane. */
+.picker-lightness-target {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 8px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--color-target);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 55%);
+  pointer-events: none;
+}
+
+.picker-lightness-target[hidden] {
+  display: none;
 }
