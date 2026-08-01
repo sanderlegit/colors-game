@@ -719,6 +719,54 @@ describe("createPicker", () => {
     expect(picks).toHaveLength(0);
   });
 
+  it("marks the target and draws the gap to the guess on reveal (ADR 0009)", () => {
+    const { slot, cursor, picker } = mount();
+    const target = planePointToOklch({ h: 180, t: 0.5 }, 0.6);
+    const guess = planePointToOklch({ h: 90, t: 0.25 }, 0.4);
+    picker.update(stateWith({ phase: "reveal", guess, target }));
+
+    const marker = must(slot.querySelector<HTMLElement>(".picker-target"));
+    const barTarget = must(slot.querySelector<HTMLElement>(".picker-lightness-target"));
+    const line = must(slot.querySelector(".picker-diff-line"));
+
+    // The reticle sits at the target's hue/chroma; the frozen cursor stays on the
+    // guess, so the two together read as the error.
+    expect(marker.hidden).toBe(false);
+    expect(marker.style.left).toBe("50.000%");
+    expect(marker.style.top).toBe("50.000%");
+    expect(marker.style.getPropertyValue("--fill-color")).toBe(oklchToCss(target));
+    expect(cursor.style.left).toBe("25.000%");
+
+    // The bar shows both lightnesses; the target thumb is the target's L.
+    expect(barTarget.hidden).toBe(false);
+    expect(barTarget.style.left).toBe("60.000%");
+
+    // The connector runs guess → target.
+    expect(line.getAttribute("x1")).toBe("25.000");
+    expect(line.getAttribute("y1")).toBe("75.000");
+    expect(line.getAttribute("x2")).toBe("50.000");
+    expect(line.getAttribute("y2")).toBe("50.000");
+  });
+
+  it("shows no target reticle while picking, and scrubs its colour after reveal", () => {
+    const { slot, picker } = mount();
+    const target = planePointToOklch({ h: 180, t: 0.5 }, 0.6);
+    const marker = must(slot.querySelector<HTMLElement>(".picker-target"));
+
+    // SPEC §9.4: nothing about the target may be in the DOM while the player guesses.
+    picker.update(picking(START));
+    expect(marker.hidden).toBe(true);
+    expect(marker.style.getPropertyValue("--fill-color")).toBe("");
+
+    picker.update(stateWith({ phase: "reveal", guess: START, target }));
+    expect(marker.hidden).toBe(false);
+
+    // Back to picking (next round): the reticle and its colour are gone again.
+    picker.update(picking(START));
+    expect(marker.hidden).toBe(true);
+    expect(marker.style.getPropertyValue("--fill-color")).toBe("");
+  });
+
   it("removes its nodes and stops listening on destroy", () => {
     const { slot, plane, picks, picker } = mount();
     picker.update(picking(START));

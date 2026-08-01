@@ -276,6 +276,8 @@ export function lightnessTrackGradient(color: Oklch): string {
 /* DOM wrapper                                                                */
 /* -------------------------------------------------------------------------- */
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 /** Vogel & Baudisch's Shift, in CSS pixels: ~26mm callout, ~22mm above contact. */
 const LOUPE_SIZE = 98;
 const LOUPE_OFFSET = 83;
@@ -363,6 +365,26 @@ export function createPicker(
   const cursor = element("div", "picker-cursor");
   cursor.setAttribute("aria-hidden", "true");
 
+  // ADR 0009: the reveal screen marks where the target sat, on this same plane,
+  // so the player can see the gap. Shown only during `reveal`; it never carries
+  // the target color at any other time (SPEC §9.4 — no leak while picking).
+  const targetMarker = element("div", "picker-target");
+  targetMarker.hidden = true;
+  targetMarker.setAttribute("aria-hidden", "true");
+
+  // A line from the guess to the target, so the error reads as a vector rather
+  // than two loose dots. viewBox units are percentages; it stretches to the
+  // plane because it has no aspect ratio of its own.
+  const diff = document.createElementNS(SVG_NS, "svg");
+  diff.setAttribute("class", "picker-diff");
+  diff.setAttribute("viewBox", "0 0 100 100");
+  diff.setAttribute("preserveAspectRatio", "none");
+  diff.setAttribute("aria-hidden", "true");
+  diff.style.display = "none";
+  const diffLine = document.createElementNS(SVG_NS, "line");
+  diffLine.setAttribute("class", "picker-diff-line");
+  diff.append(diffLine);
+
   const loupe = element("div", "picker-loupe");
   loupe.hidden = true;
   loupe.setAttribute("aria-hidden", "true");
@@ -371,7 +393,7 @@ export function createPicker(
   loupeCanvas.height = Math.round(LOUPE_SIZE * dpr);
   loupe.append(loupeCanvas);
 
-  plane.append(planeCanvas, cursor, loupe);
+  plane.append(planeCanvas, diff, cursor, targetMarker, loupe);
 
   const bar = element("div", "picker-lightness");
   bar.tabIndex = -1;
@@ -384,7 +406,10 @@ export function createPicker(
 
   const barTrack = element("div", "picker-lightness-track");
   const barThumb = element("div", "picker-lightness-thumb");
-  bar.append(barTrack, barThumb);
+  const barTargetThumb = element("div", "picker-lightness-target");
+  barTargetThumb.hidden = true;
+  barTargetThumb.setAttribute("aria-hidden", "true");
+  bar.append(barTrack, barThumb, barTargetThumb);
 
   root.append(plane, bar);
   slot.append(root);
@@ -400,9 +425,19 @@ export function createPicker(
   let refineTimer: ReturnType<typeof setTimeout> | undefined;
   let drag: Drag | null = null;
   let active = false;
+  let phase: GameState["phase"] = "idle";
   let renderedKey: string | null = null;
   /** The last value we sent out, so an echo of it does not fight the cursor. */
   let sentKey: string | null = null;
+
+  /**
+   * The dirty key for the whole picker view: the interactive flag, the phase,
+   * the guess, and — only at reveal — the target. Kept in one place so the
+   * pointer/keyboard handlers and `update` agree on when a frame is a no-op.
+   */
+  function viewKey(guessCss: string, targetCss: string): string {
+    return `${active ? "1" : "0"}|${phase}|${guessCss}|${targetCss}`;
+  }
 
   function paint(budget: number): void {
     if (planeContext === null) return;
@@ -504,6 +539,37 @@ export function createPicker(
     repaintIfLightnessChanged();
   }
 
+  /**
+   * Mark where the target sat, next to the frozen guess, and draw the gap
+   * between them (ADR 0009). Only ever called during `reveal`; `hideTarget`
+   * scrubs the colour again so nothing about the target lingers into the next
+   * pick.
+   */
+  function showTarget(target: Oklch): void {
+    const at = planeFraction(planePointForColor(target));
+    targetMarker.style.left = `${(at.x * 100).toFixed(3)}%`;
+    targetMarker.style.top = `${(at.y * 100).toFixed(3)}%`;
+    setFillColor(targetMarker, oklchToCss(target));
+    targetMarker.hidden = false;
+
+    barTargetThumb.style.left = `${(clamp01(target.L) * 100).toFixed(3)}%`;
+    barTargetThumb.hidden = false;
+
+    const from = planeFraction(planePointForColor(current));
+    diffLine.setAttribute("x1", (from.x * 100).toFixed(3));
+    diffLine.setAttribute("y1", (from.y * 100).toFixed(3));
+    diffLine.setAttribute("x2", (at.x * 100).toFixed(3));
+    diffLine.setAttribute("y2", (at.y * 100).toFixed(3));
+    diff.style.display = "";
+  }
+
+  function hideTarget(): void {
+    targetMarker.hidden = true;
+    setFillColor(targetMarker, "");
+    barTargetThumb.hidden = true;
+    diff.style.display = "none";
+  }
+
   function emit(color: Oklch): void {
     sentKey = oklchToCss(color);
     handlers.onPick(color);
@@ -581,7 +647,7 @@ export function createPicker(
     loupe.hidden = true;
     applyValue(value);
     if (!cancelled) emit(value);
-    renderedKey = `${active ? "1" : "0"}|${oklchToCss(value)}`;
+    renderedKey = viewKey(oklchToCss(value), "");
   }
 
   function onPointerUp(event: PointerEvent): void {
@@ -603,7 +669,7 @@ export function createPicker(
     if (kind === "plane") anchor = planePointForColor(next);
     applyValue(next);
     emit(next);
-    renderedKey = `${active ? "1" : "0"}|${oklchToCss(next)}`;
+    renderedKey = viewKey(oklchToCss(next), "");
   }
 
   const planeDown = (event: PointerEvent): void => {
@@ -648,11 +714,13 @@ export function createPicker(
   observer.observe(plane);
 
   function update(state: GameState): void {
+    phase = state.phase;
     const nextActive = state.phase === "picking";
     if (nextActive !== active) {
       active = nextActive;
       // An invisible picker must not be tab-reachable; the slot only takes
-      // `pointer-events` away, which focus does not go through.
+      // `pointer-events` away, which focus does not go through. The reveal
+      // annotation is read-only, so it is not focusable either.
       plane.tabIndex = nextActive ? 0 : -1;
       bar.tabIndex = nextActive ? 0 : -1;
       root.setAttribute("aria-hidden", nextActive ? "false" : "true");
@@ -662,14 +730,22 @@ export function createPicker(
     // streamed `PICK` would land back here mid-gesture and re-place the cursor.
     if (drag !== null) return;
 
-    const key = `${nextActive ? "1" : "0"}|${oklchToCss(state.guess)}`;
+    const reveal = state.phase === "reveal";
+    const guessCss = oklchToCss(state.guess);
+    const key = viewKey(guessCss, reveal ? oklchToCss(state.target) : "");
     if (key === renderedKey) return;
     renderedKey = key;
 
     // Only a change we did not cause moves the anchor: our own echo would reset
     // it every time the bar reached an end and the fraction became unreadable.
-    if (key.slice(2) !== sentKey) anchor = planePointForColor(state.guess);
+    if (guessCss !== sentKey) anchor = planePointForColor(state.guess);
     applyValue(state.guess);
+
+    // The target reticle rides on the frozen guess, so it is placed after it and
+    // scrubbed the moment we leave reveal — the target must not linger into the
+    // next pick (SPEC §9.4).
+    if (reveal) showTarget(state.target);
+    else hideTarget();
   }
 
   function destroy(): void {
