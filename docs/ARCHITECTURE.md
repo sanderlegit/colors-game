@@ -112,13 +112,32 @@ type Event =
   | { type: "CONFIRM" }
   | { type: "NEXT" }
   | { type: "RESTART"; seed: number; at: number };
-function reduce(state: GameState, event: Event): GameState;
+
+// Scoring and target generation are injected rather than imported, so the state
+// machine is testable with trivial fakes and carries no dependency on the color
+// layer. `reduce` is produced, not exported directly.
+type ReducerDeps = { score: ScoreFn; target: TargetFn };
+function createReducer(deps: ReducerDeps): (s: GameState, e: Event) => GameState;
 ```
 
-`reduce` is total: every (state, event) pair returns a state, illegal
-combinations return the input unchanged. It never throws. It performs the
-memorize→picking transition itself when `TICK` pushes elapsed time past
-`memorizeMs` — the timer is domain logic, not a `setTimeout` in the UI.
+The reducer is total: every (state, event) pair returns a state, illegal
+combinations return the **same object reference** so callers can detect a no-op
+without a deep compare. It never throws. It performs the memorize→picking
+transition itself when `TICK` pushes elapsed time past `memorizeMs` — the timer
+is domain logic, not a `setTimeout` in the UI.
+
+Refinements made during implementation, now binding:
+
+- `GameState` and `results` are deeply `readonly`.
+- `TICK` is legal in every phase (it advances `now`), but a stalled or rewound
+  clock (`at <= now`) is a no-op. So the no-op set is the illegal (phase × event)
+  pairs *plus* non-advancing ticks.
+- `RESTART` is legal only from `summary` — there is no mid-game restart, per SPEC §3.
+- `pickerStart(seed, roundIndex)` derives the C=0 start position from a
+  double-mixed seed, so the picker stream cannot correlate with whatever
+  `TargetFn` derives from the same `(seed, roundIndex)`.
+- `Rng.state` is a getter on a mutating object: `makeRng(rng.state)` reconstructs
+  the generator exactly, so a run is snapshot/resumable from a single number.
 
 ## Rendering without a framework
 

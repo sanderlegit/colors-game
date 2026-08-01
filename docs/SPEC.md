@@ -119,7 +119,7 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
 ## 6. Scoring
 
 - Perceptual distance is computed in a perceptually uniform space (CIEDE2000 or
-  OKLab ΔE — final choice recorded in `docs/adr/0003-perceptual-scoring.md` once
+  OKLab ΔE — final choice recorded in `docs/adr/0004-perceptual-scoring.md` once
   research lands).
 - Distance maps to a **0–100 round score** via a monotonically decreasing curve
   tuned so that:
