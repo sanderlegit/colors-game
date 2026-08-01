@@ -8,10 +8,11 @@
  * is secret.
  */
 
+import { oklchToCss } from "@/color/format";
 import { isFinalRound, totalScore } from "@/domain/selectors";
 import type { GameState, RoundResult } from "@/domain/state";
 import { ROUNDS_PER_GAME } from "@/domain/state";
-import { oklchCss, setFillColor } from "@/ui/swatch";
+import { setFillColor } from "@/ui/swatch";
 
 const MAX_GAME_SCORE = ROUNDS_PER_GAME * 100;
 const EMPTY = "—";
@@ -98,8 +99,8 @@ export function createReveal(root: HTMLElement, handlers: RevealHandlers): Revea
     const visible = state.phase === "reveal";
     const result = visible ? currentResult(state) : undefined;
 
-    const targetCss = visible ? oklchCss(state.target) : "";
-    const guessCss = visible ? oklchCss(state.guess) : "";
+    const targetCss = visible ? oklchToCss(state.target) : "";
+    const guessCss = visible ? oklchToCss(state.guess) : "";
     const delta = result === undefined ? EMPTY : result.deltaE.toFixed(3);
     const score = result === undefined ? EMPTY : String(Math.round(result.score));
     const total = visible ? `${Math.round(totalScore(state))} of ${MAX_GAME_SCORE}` : EMPTY;

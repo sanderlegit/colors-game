@@ -136,6 +136,18 @@ describe("createGameView", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "RESTART", seed: 4242, at: 12000 });
   });
 
+  it("confirms on Enter from the picker (SPEC §8)", () => {
+    const { dispatch, picker } = setup();
+    picker.slot.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "CONFIRM" });
+  });
+
+  it("leaves other keys to the picker", () => {
+    const { dispatch, picker } = setup();
+    picker.slot.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("fans every update out to the picker", () => {
     const { view, picker } = setup();
     const state = stateWith({ phase: "picking" });

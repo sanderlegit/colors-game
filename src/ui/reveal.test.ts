@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { oklchToCss } from "@/color/format";
 import { oklch } from "@/color/types";
 import type { GameState, RoundResult, Score } from "@/domain/state";
 import { initialState } from "@/domain/state";
 import { createReveal } from "@/ui/reveal";
-import { FILL_COLOR_PROPERTY, oklchCss } from "@/ui/swatch";
+import { FILL_COLOR_PROPERTY } from "@/ui/swatch";
 
 function stateWith(patch: Partial<GameState>): GameState {
   return { ...initialState(), ...patch };
@@ -61,8 +62,8 @@ describe("createReveal", () => {
 
     const chips = [...root.querySelectorAll<HTMLElement>(".reveal-chip")];
     expect(chips.length).toBe(2);
-    expect(chips[0]?.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchCss(TARGET));
-    expect(chips[1]?.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchCss(GUESS));
+    expect(chips[0]?.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchToCss(TARGET));
+    expect(chips[1]?.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchToCss(GUESS));
     expect(must(root.querySelector<HTMLElement>(".reveal")).hidden).toBe(false);
   });
 

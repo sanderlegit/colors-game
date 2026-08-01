@@ -47,5 +47,10 @@ export function parseHex(s: string): Srgb | null {
  */
 export function oklchToCss(c: Oklch): string {
   const trim = (value: number, places: number): string => String(Number(value.toFixed(places)));
-  return `oklch(${trim(c.L, 4)} ${trim(c.c, 4)} ${trim(c.h, 2)})`;
+  // Guesses arrive from a picker and can sit outside the nominal ranges, so the
+  // coordinates are brought into range here rather than at every call site.
+  const L = Number.isFinite(c.L) ? Math.min(Math.max(c.L, 0), 1) : 0;
+  const chroma = Number.isFinite(c.c) ? Math.max(c.c, 0) : 0;
+  const hue = Number.isFinite(c.h) ? ((c.h % 360) + 360) % 360 : 0;
+  return `oklch(${trim(L, 4)} ${trim(chroma, 4)} ${trim(hue, 2)})`;
 }

@@ -6,10 +6,11 @@
  * would mean duplicating the layout and the show/hide logic to save nothing.
  */
 
+import { oklchToCss } from "@/color/format";
 import { totalScore } from "@/domain/selectors";
 import type { GameState } from "@/domain/state";
 import { ROUNDS_PER_GAME } from "@/domain/state";
-import { oklchCss, setFillColor } from "@/ui/swatch";
+import { setFillColor } from "@/ui/swatch";
 
 const MAX_GAME_SCORE = ROUNDS_PER_GAME * 100;
 
@@ -79,11 +80,11 @@ export function createMenu(
       // Safe to show the targets here — the game is over.
       const chip = document.createElement("span");
       chip.className = "menu-round-chip";
-      setFillColor(chip, oklchCss(result.target));
+      setFillColor(chip, oklchToCss(result.target));
 
       const guessChip = document.createElement("span");
       guessChip.className = "menu-round-chip";
-      setFillColor(guessChip, oklchCss(result.guess));
+      setFillColor(guessChip, oklchToCss(result.guess));
 
       const label = document.createElement("span");
       label.textContent = `Round ${index + 1}`;
@@ -98,11 +99,21 @@ export function createMenu(
   }
 
   let renderedKey: string | null = null;
+  let lastPhase: GameState["phase"] | null = null;
+  let beatTheRecord = false;
 
   function update(state: GameState): void {
     phase = state.phase;
     const visible = state.phase === "idle" || state.phase === "summary";
     const total = Math.round(totalScore(state));
+
+    // Decided once, on the way in, and deliberately before the composition root
+    // stores the new record. Re-deriving it from `bestScore` on later frames
+    // would make the celebration vanish the moment the new best is saved.
+    if (state.phase === "summary" && lastPhase !== "summary") {
+      beatTheRecord = total > bestScore;
+    }
+    lastPhase = state.phase;
 
     const key = `${state.phase}|${visible ? total : 0}|${bestScore}|${state.results.length}`;
     if (key === renderedKey) return;
@@ -113,8 +124,9 @@ export function createMenu(
 
     if (state.phase === "summary") {
       heading.textContent = `${total} of ${MAX_GAME_SCORE}`;
-      blurb.textContent =
-        total > bestScore ? "A new best. Nicely remembered." : "Here is how each round went.";
+      blurb.textContent = beatTheRecord
+        ? "A new best. Nicely remembered."
+        : "Here is how each round went.";
       renderBreakdown(state);
       breakdown.hidden = false;
       action.textContent = "Play again";

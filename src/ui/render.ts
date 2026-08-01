@@ -88,6 +88,16 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   );
   const reveal = createReveal(resultRegion, { onNext: () => deps.dispatch({ type: "NEXT" }) });
 
+  // SPEC §8: Enter confirms. The picker owns the arrow keys, but confirming from
+  // it would mean handing it a second responsibility, so the binding lives here.
+  // Scoped to the slot, so it cannot double-fire with a focused button.
+  function onSlotKeyDown(event: KeyboardEvent): void {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    deps.dispatch({ type: "CONFIRM" });
+  }
+  swatch.pickerSlot.addEventListener("keydown", onSlotKeyDown);
+
   // `at` is the last timestamp the reducer saw, so a game started between frames
   // still begins its memorize window from a clock the reducer agrees with.
   let now = 0;
@@ -108,6 +118,7 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   }
 
   function destroy(): void {
+    swatch.pickerSlot.removeEventListener("keydown", onSlotKeyDown);
     for (const part of parts) part.destroy();
     game.remove();
   }

@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { oklchToCss } from "@/color/format";
 import { type Oklch, oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 import { initialState } from "@/domain/state";
 import { createPreview } from "@/ui/preview";
-import { FILL_COLOR_PROPERTY, oklchCss } from "@/ui/swatch";
+import { FILL_COLOR_PROPERTY } from "@/ui/swatch";
 
 function stateWith(patch: Partial<GameState>): GameState {
   return { ...initialState(), ...patch };
@@ -54,7 +55,7 @@ describe("createPreview", () => {
     preview.update(stateWith({ phase: "picking", guess: GUESS }));
 
     const fill = must(root.querySelector<HTMLElement>(".preview-fill"));
-    expect(fill.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchCss(GUESS));
+    expect(fill.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchToCss(GUESS));
     expect(values(root)).toEqual(["—", "0.720", "0.090", "32.0°"]);
     expect(must(root.querySelector(".preview")).classList.contains("is-dim")).toBe(false);
   });

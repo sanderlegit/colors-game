@@ -551,3 +551,125 @@ p {
     display: none !important;
   }
 }
+
+/* --- Picker (ADR 0005) ---------------------------------------------------- */
+
+/* Mount contract with src/ui/swatch.ts: the slot has no size of its own and its
+   `opacity` / `pointer-events` belong to the dissolve. Everything here is a
+   100%×100% child of it, so the picker's box is the swatch's box by construction
+   (SPEC §9.4 asserts they match within 1px). */
+.picker {
+  display: grid;
+  /* ADR 0005: the slider is inlaid, not placed outside — the footprint match is
+     the game mechanic. 268 of 300px on the L axis costs 0.18 → 0.20 ΔE00/px. */
+  grid-template-rows: minmax(0, 1fr) max(32px, var(--tap-target));
+  width: 100%;
+  height: 100%;
+  /* Clips both children to the shared rounded rect, so neither needs to know
+     which corners it owns. */
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* The two elements in the swatch that own a gesture, so the only ones that may
+   take `touch-action` away from the page. */
+.picker-plane,
+.picker-hue {
+  touch-action: none;
+}
+
+.picker-plane {
+  position: relative;
+  min-height: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* The outline would be clipped by `.picker`'s overflow, so it is drawn inward. */
+.picker-plane:focus-visible,
+.picker-hue:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
+
+.picker-plane-canvas {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+/* A separate positioned element, never part of the gradient: dragging moves this
+   and repaints nothing (ADR 0005). */
+.picker-cursor {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--fill-color, transparent);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 55%),
+    inset 0 0 0 1px rgb(0 0 0 / 25%);
+  pointer-events: none;
+}
+
+/* Vogel & Baudisch's Shift callout: a copy of the region the fingertip is
+   covering, offset above the contact point. Touch only — a mouse cursor has a
+   one-pixel hot spot and occludes nothing. */
+.picker-loupe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 98px;
+  height: 98px;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--fill-color, transparent);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+.picker-loupe[hidden] {
+  display: none;
+}
+
+.picker-loupe-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* ADR 0005: hue is the precision bottleneck (~0.93 ΔE00/px against 0.18 in the
+   plane), so it gets the full width and a tap-target-tall band. */
+.picker-hue {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.picker-hue-track {
+  width: 100%;
+  height: 32px;
+  /* Recoloured live to the current L and C; the fallback only shows before the
+     first update. */
+  background: var(--hue-track, linear-gradient(to right, #808080, #808080));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 20%);
+}
+
+.picker-hue-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 55%),
+    inset 0 0 0 1px rgb(0 0 0 / 25%);
+  pointer-events: none;
+}

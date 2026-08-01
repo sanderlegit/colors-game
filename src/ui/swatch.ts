@@ -19,7 +19,7 @@
  * and biases them away from the target hue. The mask lets it decay.
  */
 
-import type { Oklch } from "@/color/types";
+import { oklchToCss } from "@/color/format";
 import type { GameState } from "@/domain/state";
 
 /** SPEC §8 / ARCHITECTURE: each cross-fade is 450ms, or 0 under reduced motion. */
@@ -42,28 +42,6 @@ export const MASK_HOLD_MS = 400;
 function clampMin(value: number, min: number): number {
   if (!Number.isFinite(value) || value < min) return min;
   return value;
-}
-
-function normalizeHue(hue: number): number {
-  if (!Number.isFinite(hue)) return 0;
-  const wrapped = hue % 360;
-  return wrapped < 0 ? wrapped + 360 : wrapped;
-}
-
-/**
- * OKLCh as a CSS color. Every browser we target implements the `oklch()`
- * function natively, so rendering a color needs no conversion code at all.
- *
- * Temporary home: this belongs in `src/color/format.ts` alongside hex
- * parse/format (BACKLOG 1.4). That module landed in parallel with this one and
- * now exports `oklchToCss`; the two should be collapsed into it — the callers
- * here and the precision the readout dirty-check depends on are the only things
- * that need checking when they are.
- */
-export function oklchCss(color: Oklch): string {
-  const L = Math.min(clampMin(color.L, 0), 1);
-  const c = clampMin(color.c, 0);
-  return `oklch(${L.toFixed(4)} ${c.toFixed(4)} ${normalizeHue(color.h).toFixed(2)})`;
 }
 
 /**
@@ -192,7 +170,7 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
       options.reducedMotion === true || state.settings.reducedMotion ? 0 : configuredDuration;
 
     if (mode === "fill") {
-      const css = oklchCss(state.target);
+      const css = oklchToCss(state.target);
       if (css !== renderedFill) {
         setFillColor(fill, css);
         renderedFill = css;

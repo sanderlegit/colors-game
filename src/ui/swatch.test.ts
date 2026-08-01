@@ -1,14 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { oklchToCss } from "@/color/format";
 import { oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 import { initialState } from "@/domain/state";
-import {
-  createSwatch,
-  DISSOLVE_MS,
-  FILL_COLOR_PROPERTY,
-  MASK_HOLD_MS,
-  oklchCss,
-} from "@/ui/swatch";
+import { createSwatch, DISSOLVE_MS, FILL_COLOR_PROPERTY, MASK_HOLD_MS } from "@/ui/swatch";
 
 /** Fade in, hold the neutral mask, fade out (ADR 0006). */
 const FULL_DISSOLVE_MS = DISSOLVE_MS + MASK_HOLD_MS + DISSOLVE_MS;
@@ -33,16 +28,6 @@ function fillColor(element: HTMLElement): string {
 }
 
 const TARGET = oklch(0.62, 0.14, 250);
-
-describe("oklchCss", () => {
-  it("renders a native CSS oklch() function", () => {
-    expect(oklchCss(oklch(0.5, 0.1, 120))).toBe("oklch(0.5000 0.1000 120.00)");
-  });
-
-  it("wraps hue into 0..360 and clamps out-of-range coordinates", () => {
-    expect(oklchCss(oklch(1.4, -0.2, -30))).toBe("oklch(1.0000 0.0000 330.00)");
-  });
-});
 
 describe("createSwatch", () => {
   beforeEach(() => {
@@ -73,7 +58,7 @@ describe("createSwatch", () => {
     swatch.update(stateWith({ phase: "memorize", target: TARGET }));
 
     const fill = must(root.querySelector<HTMLElement>(".swatch-fill"));
-    expect(fillColor(fill)).toBe(oklchCss(TARGET));
+    expect(fillColor(fill)).toBe(oklchToCss(TARGET));
     expect(fill.style.opacity).toBe("1");
   });
 
@@ -213,7 +198,7 @@ describe("createSwatch", () => {
 
     expect(swatch.pickerSlot.style.pointerEvents).toBe("none");
     expect(swatch.pickerSlot.style.opacity).toBe("0");
-    expect(fillColor(fill)).toBe(oklchCss(TARGET));
+    expect(fillColor(fill)).toBe(oklchToCss(TARGET));
   });
 
   it("removes its nodes and pending timers on destroy", () => {

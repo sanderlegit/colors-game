@@ -10,9 +10,10 @@
  * yet, and showing the picker's neutral start color would imply one exists.
  */
 
+import { oklchToCss } from "@/color/format";
 import type { Oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
-import { oklchCss, setFillColor } from "@/ui/swatch";
+import { setFillColor } from "@/ui/swatch";
 
 /** Shown wherever a value is unavailable, so the readout never collapses in height. */
 const EMPTY = "—";
@@ -81,7 +82,7 @@ export function createPreview(root: HTMLElement, options: PreviewOptions = {}): 
     // The CSS string is the dirty key: it is finer-grained than every row of the
     // readout, and empty exactly when there is no guess to show. Bailing on it
     // before formatting keeps the per-frame cost at one string compare.
-    const background = active ? oklchCss(guess) : "";
+    const background = active ? oklchToCss(guess) : "";
     if (background === renderedKey) return;
     renderedKey = background;
 

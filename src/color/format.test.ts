@@ -99,6 +99,23 @@ describe("oklchToCss", () => {
     expect(oklchToCss(oklch(0.5, 0.1, 200))).toBe("oklch(0.5 0.1 200)");
   });
 
+  it("brings out-of-range coordinates into range", () => {
+    // A guess comes from a picker plane whose out-of-gamut half is selectable in
+    // principle, so this is a real input, not a defensive nicety.
+    expect(oklchToCss(oklch(1.4, -0.2, -30))).toBe("oklch(1 0 330)");
+    expect(oklchToCss(oklch(-0.5, 0.1, 725))).toBe("oklch(0 0.1 5)");
+  });
+
+  it("degrades a non-finite coordinate to zero rather than emitting NaN", () => {
+    // `oklch(NaN …)` is an invalid declaration, so the browser drops it and the
+    // surface silently keeps its previous color — a bug that looks like a stale
+    // render, far from its cause.
+    expect(oklchToCss(oklch(Number.NaN, 0.1, 200))).toBe("oklch(0 0.1 200)");
+    expect(oklchToCss(oklch(0.5, Number.NaN, 200))).toBe("oklch(0.5 0 200)");
+    expect(oklchToCss(oklch(0.5, 0.1, Number.NaN))).toBe("oklch(0.5 0.1 0)");
+    expect(oklchToCss(oklch(0.5, 0.1, Number.POSITIVE_INFINITY))).toBe("oklch(0.5 0.1 0)");
+  });
+
   it("formats sRGB blue at the coordinates W3C publishes", () => {
     // W3C gives oklch(0.452 0.313 264.1); our unrounded values are
     // 0.45201372, 0.31321439, 264.052023.

@@ -110,8 +110,27 @@ describe("createMenu", () => {
     menu.update(summary([result(90), result(80)]));
     expect(text(root, ".menu-blurb")).toBe("Here is how each round went.");
 
+    // A fresh game has to pass through a non-summary phase first.
+    menu.update(stateWith({ phase: "picking" }));
     menu.update(summary([result(100), result(100), result(100)]));
     expect(text(root, ".menu-blurb")).toBe("A new best. Nicely remembered.");
+  });
+
+  it("keeps celebrating after the new best is stored", () => {
+    const root = mount();
+    const menu = createMenu(root, { onStart: () => {}, onRestart: () => {} }, { bestScore: 200 });
+    const finished = summary([result(100), result(100), result(100)]);
+
+    menu.update(finished);
+    expect(text(root, ".menu-blurb")).toBe("A new best. Nicely remembered.");
+
+    // The composition root saves the record and tells the menu, on the same
+    // summary screen. The celebration must survive that.
+    menu.setBestScore(300);
+    menu.update(finished);
+
+    expect(text(root, ".menu-blurb")).toBe("A new best. Nicely remembered.");
+    expect(text(root, ".menu-best")).toBe("Best: 300");
   });
 
   it("hides the best line until there is a best", () => {
