@@ -217,9 +217,14 @@ p {
   min-height: 20vh;
 }
 
+/* Transparent to layout, exactly like `.game-menu`. The reveal panel is an
+   overlay, so the board behind it never moves when a round ends.
+
+   Reserving the panel's height instead was the obvious fix and does not work:
+   it is ~300px, and on a 664px phone that does not coexist with a 273px swatch,
+   the HUD and the preview. It also rendered partly below the fold. */
 .game-result {
-  grid-area: result;
-  width: 100%;
+  display: contents;
 }
 
 /* SPEC §4: at 640px and up the preview sits to the right of the swatch. */
@@ -478,17 +483,31 @@ p {
 
 /* --- Reveal (SPEC §6) ---------------------------------------------------- */
 .reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
   display: grid;
-  gap: var(--space-3);
+  align-content: center;
   justify-items: center;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
+  gap: var(--space-3);
+  padding: calc(var(--space-4) + var(--safe-top)) var(--space-3)
+    calc(var(--space-4) + var(--safe-bottom));
+  overflow-y: auto;
+  /* Opaque rather than a translucent scrim: the board behind it still shows the
+     target, and a half-visible picker competing with the result chips is noise
+     at the one moment the player is reading numbers. */
+  background-color: var(--color-bg);
 }
 
 .reveal[hidden] {
   display: none;
+}
+
+/* The panel itself, so the card reads as a card against the full-bleed backdrop. */
+.reveal-pair,
+.reveal-stats,
+.reveal-next {
+  max-width: min(100%, 32rem);
 }
 
 .reveal-pair {

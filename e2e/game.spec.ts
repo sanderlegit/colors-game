@@ -106,6 +106,29 @@ test("the confirm button is unavailable until the picker has been moved", async 
   await expect(page.locator(".hud-confirm")).toBeDisabled();
 });
 
+test("the reveal does not move the board underneath it", async ({ page }) => {
+  await playToPicking(page);
+  const before = await box(page.locator(".swatch-stack"));
+
+  const plane = await box(page.locator(".picker-plane"));
+  await page.mouse.move(plane.x + plane.width * 0.3, plane.y + plane.height * 0.4);
+  await page.mouse.down();
+  await page.mouse.move(plane.x + plane.width * 0.4, plane.y + plane.height * 0.3, { steps: 5 });
+  await page.mouse.up();
+  await page.locator(".hud-confirm").click();
+  await expect(page.locator(".reveal")).toBeVisible();
+
+  // The reveal is an overlay precisely so this holds: reserving its ~300px in
+  // the grid does not fit on a 664px phone alongside the swatch.
+  expectSameRect(await box(page.locator(".swatch-stack")), before, "stage across reveal");
+
+  const viewport = page.viewportSize();
+  if (viewport === null) throw new Error("no viewport");
+  const reveal = await box(page.locator(".reveal"));
+  expect(reveal.y).toBeGreaterThanOrEqual(-1);
+  expect(reveal.y + reveal.height).toBeLessThanOrEqual(viewport.height + 1);
+});
+
 test("a full round: memorize, pick, confirm, score", async ({ page }) => {
   await playToPicking(page);
 
