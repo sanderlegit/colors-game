@@ -14,7 +14,7 @@ Every item's exit criteria include `npm run verify` green.
 | 0.1 | Toolchain scaffold: TS strict, Vite, Vitest, Biome, Playwright, CI, git | `npm run verify` passes on an empty project |
 | 0.2 | Spec, architecture, ADRs, agent working agreement | This directory + `CLAUDE.md` |
 | 0.3 | Color-science research: metric, curve, conversion math, test vectors | `docs/research/*.md` with cited values |
-| 0.4 | Purity guard test | `tests/purity.test.ts` fails on a planted violation |
+| 0.4 | Purity guard test | `tests/purity.node.test.ts` fails on a planted violation |
 
 ## Phase 1 — the pure core ✅
 

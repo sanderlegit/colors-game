@@ -26,7 +26,7 @@ Files under `src/domain/**` and `src/color/**` are pure:
 - No mutation of inputs; return new objects.
 
 This is what makes the test suite fast and deterministic. A guard test in
-`tests/purity.test.ts` scans these directories and fails the build on violation.
+`tests/purity.node.test.ts` scans these directories and fails the build on violation.
 If you think you need an exception, you need an ADR instead.
 
 ## Types
