@@ -1,22 +1,22 @@
 /**
- * The picker: an OKLCh L×C plane at constant hue, plus an inlaid hue slider
- * (ADR 0005).
+ * The picker: an OKLCh hue × chroma-fraction plane with an inlaid lightness bar
+ * (ADR 0007).
  *
- * Three decisions from the ADR are load-bearing and are easy to "simplify" back
- * into bugs:
+ * Three properties of this model are load-bearing and are easy to "simplify"
+ * back into bugs:
  *
- * 1. **L×C, not HSV/OKHSV/OKHSL.** Every cylinder-shaped space collapses at its
- *    edges, so a fixed pixel slip costs wildly different amounts depending on
- *    where you are (4.0×–3.5× unfairness, 24–29% near-dead area). A true L×C
- *    plane drops that to 2.2× and 2%. The perceptual label on OKHSL does not
- *    help — the problem is topological.
- * 2. **Out of gamut is inert, never clamped.** ~50% of the rectangle is outside
- *    sRGB at any hue. Clamping would map many distinct cursor positions onto one
- *    colour, which is worse than an honest dead zone, so `selectAtPlanePoint`
- *    returns `null` there and the pointer handlers do nothing.
- * 3. **The hue slider is the precision bottleneck**, not the plane — ~0.93
- *    ΔE00/px against 0.18. Hence full width, a tap-target-tall band, and a
- *    0.5°/arrow nudge, which is already finer than one pixel of slider (~1.2°).
+ * 1. **The plane shows every hue at once.** x is hue over the full 0..360°, y is
+ *    the chroma fraction `t` — most saturated at the top, neutral grey at the
+ *    bottom. A player who has just memorised a colour begins by *finding* it,
+ *    and with hue behind a slider it is not on screen to be found.
+ * 2. **Chroma is a fraction of what the gamut offers, so the whole plane is
+ *    displayable.** `C = t · maxChroma(L, h)`, the same construction
+ *    `generateTarget` uses. There is no out-of-gamut region to render inert and
+ *    nothing to clip: every point in the rectangle selects a colour, and adding
+ *    a clamp back would be a bug rather than a safety net.
+ * 3. **The canvas depends on lightness alone.** Hue and `t` are the plane's own
+ *    axes, so a drag inside it moves the cursor and repaints nothing; only the
+ *    bar dirties the canvas.
  *
  * The pure geometry and arithmetic live in the exported functions at the top;
  * `createPicker` is a thin DOM wrapper over them. happy-dom has neither canvas
@@ -25,7 +25,7 @@
 
 import { oklchToSrgb } from "@/color/convert";
 import { oklchToCss } from "@/color/format";
-import { clipChromaToGamut, maxChroma } from "@/color/gamut";
+import { maxChroma } from "@/color/gamut";
 import { type Oklch, oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 import { setFillColor } from "@/ui/swatch";
@@ -35,15 +35,18 @@ import { setFillColor } from "@/ui/swatch";
 /* -------------------------------------------------------------------------- */
 
 /**
- * A position in the plane, both axes normalized to 0..1.
+ * A position in the plane: a hue in degrees and a chroma *fraction*.
  *
- * `v` is lightness directly. `u` is chroma as a **fraction of the widest chroma
- * this hue can reach**, not an absolute value — the sRGB gamut's chroma ceiling
- * swings 13× across hues, so an absolute axis would leave teal with a usable
- * sliver and waste most of the plane. Normalizing keeps the in-gamut share near
- * the ~50% the ADR measured at every hue.
+ * `t` is chroma as a share of the widest chroma this `(L, h)` can reach, not an
+ * absolute value. The sRGB chroma ceiling swings ~13× across `(L, h)`, so an
+ * absolute axis would leave teal a usable sliver and put half the rectangle
+ * outside the gamut; as a fraction, `t = 0.9` means "vivid" at every hue and
+ * every point in the plane is in gamut by construction (ADR 0007).
  */
-export type PlanePoint = { readonly u: number; readonly v: number };
+export type PlanePoint = { readonly h: number; readonly t: number };
+
+/** A position in the plane as 0..1 of its box, y measured downward from the top. */
+export type PlaneFraction = { readonly x: number; readonly y: number };
 
 /** The subset of a client rect the pointer maths needs. */
 export type Rect = {
@@ -53,11 +56,17 @@ export type Rect = {
   readonly height: number;
 };
 
-/** SPEC §8 / ADR 0005: 0.5° is sub-pixel on the slider (one pixel is ~1.2°). */
+/**
+ * Hue now spans the plane's width rather than a slider's, which is the same
+ * ~300px and so the same ~1.2°/px. 0.5° stays sub-pixel (SPEC §8).
+ */
 export const HUE_NUDGE_DEG = 0.5;
 
-/** One arrow in the plane, in normalized units — ~1/400th of an axis. */
-export const PLANE_NUDGE = 0.0025;
+/** One arrow along the plane's y axis — ~1/400th of the chroma fraction range. */
+export const CHROMA_FRACTION_NUDGE = 0.0025;
+
+/** One arrow along the lightness bar. Full width, so this is again sub-pixel. */
+export const LIGHTNESS_NUDGE = 0.0025;
 
 /** SPEC §8: shift is the coarse modifier, ×10 on both surfaces. */
 export const COARSE_MULTIPLIER = 10;
@@ -76,79 +85,42 @@ export function wrapHue(degrees: number): number {
 }
 
 /**
- * Widest in-gamut chroma anywhere on this hue's leaf — the cusp. This is the
- * scale of the plane's horizontal axis.
+ * Pointer client coordinates → plane position. Clamped to the rectangle.
  *
- * Memoized on hue quantized to 0.5°, which bounds the cache at 720 entries and
- * costs under 0.2% of chroma. Both directions of the mapping go through this
- * function, so they stay exact inverses of each other whatever it returns.
+ * The right edge is 360°, which wraps to 0° — the hue axis is a circle cut open
+ * at the left edge, so the two edges show the same column of colours.
  */
-const chromaAxisCache = new Map<number, number>();
-
-export function chromaAxisMax(hue: number): number {
-  const key = Math.round(wrapHue(hue) * 2) / 2;
-  const cached = chromaAxisCache.get(key);
-  if (cached !== undefined) return cached;
-
-  // The cusp is a single smooth maximum in L: a coarse sweep then a local
-  // refinement finds it without a general optimizer.
-  let bestL = 0.5;
-  let best = 0;
-  for (let L = 0.02; L < 1; L += 0.02) {
-    const c = maxChroma(L, key);
-    if (c > best) {
-      best = c;
-      bestL = L;
-    }
-  }
-  for (let L = bestL - 0.02; L <= bestL + 0.02; L += 0.002) {
-    if (L <= 0 || L >= 1) continue;
-    const c = maxChroma(L, key);
-    if (c > best) best = c;
-  }
-
-  chromaAxisCache.set(key, best);
-  return best;
-}
-
-/** Pointer client coordinates → plane position. Clamped to the rectangle. */
 export function planePointFromPointer(x: number, y: number, rect: Rect): PlanePoint {
-  const u = rect.width > 0 ? (x - rect.left) / rect.width : 0;
-  const v = rect.height > 0 ? 1 - (y - rect.top) / rect.height : 0;
-  return { u: clamp01(u), v: clamp01(v) };
+  const across = rect.width > 0 ? (x - rect.left) / rect.width : 0;
+  const down = rect.height > 0 ? (y - rect.top) / rect.height : 1;
+  return { h: wrapHue(clamp01(across) * 360), t: clamp01(1 - down) };
 }
 
-/** Plane position → colour, without asking whether it is displayable. */
-export function planePointToOklch(point: PlanePoint, hue: number): Oklch {
-  const h = wrapHue(hue);
-  return oklch(clamp01(point.v), clamp01(point.u) * chromaAxisMax(h), h);
-}
-
-/** Where a colour sits in the plane. The inverse of `planePointToOklch`. */
-export function planePointForColor(color: Oklch): PlanePoint {
-  const scale = chromaAxisMax(color.h);
-  return { u: scale > 0 ? clamp01(color.c / scale) : 0, v: clamp01(color.L) };
+/** Plane position plus a lightness → the colour it names. Always in gamut. */
+export function planePointToOklch(point: PlanePoint, lightness: number): Oklch {
+  const L = clamp01(lightness);
+  const h = wrapHue(point.h);
+  return oklch(L, clamp01(point.t) * maxChroma(L, h), h);
 }
 
 /**
- * The selection rule: a plane position yields a colour only where sRGB can
- * actually show it. `null` is the inert region (ADR 0005) — the caller must not
- * substitute a clamped colour for it.
+ * Where a colour sits in the plane. The inverse of `planePointToOklch` wherever
+ * the hue leaf has any chroma at all; at `L = 0` and `L = 1` it cannot be, since
+ * black and white are the only colours there and `t` no longer exists.
  */
-export function selectAtPlanePoint(point: PlanePoint, hue: number): Oklch | null {
-  const color = planePointToOklch(point, hue);
-  return color.c <= maxChroma(color.L, color.h) ? color : null;
+export function planePointForColor(color: Oklch): PlanePoint {
+  const ceiling = maxChroma(color.L, color.h);
+  return { h: wrapHue(color.h), t: ceiling > 0 ? clamp01(color.c / ceiling) : 0 };
 }
 
-/** Pointer client X → hue. The slider runs 0..360° left to right. */
-export function hueFromPointer(x: number, rect: Rect): number {
-  const fraction = rect.width > 0 ? (x - rect.left) / rect.width : 0;
-  return wrapHue(clamp01(fraction) * 360);
+/** Plane position → its fraction of the plane's box, for placing the cursor. */
+export function planeFraction(point: PlanePoint): PlaneFraction {
+  return { x: wrapHue(point.h) / 360, y: 1 - clamp01(point.t) };
 }
 
-/** Hue → its fraction along the slider, for positioning the thumb. */
-export function hueSliderFraction(hue: number): number {
-  return wrapHue(hue) / 360;
+/** Pointer client X → lightness. The bar runs dim (0) to bright (1). */
+export function lightnessFromPointer(x: number, rect: Rect): number {
+  return clamp01(rect.width > 0 ? (x - rect.left) / rect.width : 0);
 }
 
 function stepFor(key: string, step: number): number | null {
@@ -164,50 +136,56 @@ function stepFor(key: string, step: number): number | null {
   }
 }
 
+function isHorizontal(key: string): boolean {
+  return key === "ArrowLeft" || key === "ArrowRight";
+}
+
 function sameColor(a: Oklch, b: Oklch): boolean {
   return a.L === b.L && a.c === b.c && a.h === b.h;
 }
 
 /**
- * Arrow-key nudge inside the plane. `null` means "not a key we handle, or the
- * value did not move" — either way the caller must not dispatch.
+ * Arrow-key nudge inside the plane: hue sideways, chroma fraction vertically.
+ * `null` means "not a key we handle, or the value did not move" — either way the
+ * caller must not dispatch.
  *
- * Unlike the pointer path this *does* clip chroma back into gamut rather than
- * refusing the move. A nudge is relative, so there is no cursor-position-to-
- * colour ambiguity to protect; refusing instead would strand the player against
- * the cusp with a key that silently does nothing.
+ * Hue wraps, so the horizontal arrows never run out of travel; `t` clamps, so
+ * the vertical ones stop at the saturated top and the grey floor.
  */
 export function nudgeInPlane(guess: Oklch, key: string, coarse: boolean): Oklch | null {
-  const step = PLANE_NUDGE * (coarse ? COARSE_MULTIPLIER : 1);
-  const delta = stepFor(key, step);
+  const horizontal = isHorizontal(key);
+  const unit = horizontal ? HUE_NUDGE_DEG : CHROMA_FRACTION_NUDGE;
+  const delta = stepFor(key, unit * (coarse ? COARSE_MULTIPLIER : 1));
   if (delta === null) return null;
 
   const point = planePointForColor(guess);
-  const horizontal = key === "ArrowLeft" || key === "ArrowRight";
   const moved: PlanePoint = horizontal
-    ? { u: clamp01(point.u + delta), v: point.v }
-    : { u: point.u, v: clamp01(point.v + delta) };
+    ? { h: wrapHue(point.h + delta), t: point.t }
+    : { h: point.h, t: clamp01(point.t + delta) };
 
-  const next = clipChromaToGamut(planePointToOklch(moved, guess.h));
+  const next = planePointToOklch(moved, guess.L);
   return sameColor(next, guess) ? null : next;
 }
 
 /**
- * Arrow-key nudge on the hue slider. `anchor` is the plane position the chroma
- * is rebuilt from, so travelling through a gamut-starved hue and back does not
- * ratchet chroma down a step at a time.
+ * Arrow-key nudge on the lightness bar.
+ *
+ * Only the chroma *fraction* is taken from `anchor`; the hue is the guess's own,
+ * because the plane owns hue. The anchor matters at the ends of the bar: at
+ * `L = 1` every colour is white, so the fraction cannot be recovered from the
+ * guess, and rebuilding from the guess would strand the player on grey the
+ * moment they came back down.
  */
-export function nudgeHue(
+export function nudgeLightness(
   guess: Oklch,
   anchor: PlanePoint,
   key: string,
   coarse: boolean,
 ): Oklch | null {
-  const step = HUE_NUDGE_DEG * (coarse ? COARSE_MULTIPLIER : 1);
-  const delta = stepFor(key, step);
+  const delta = stepFor(key, LIGHTNESS_NUDGE * (coarse ? COARSE_MULTIPLIER : 1));
   if (delta === null) return null;
 
-  const next = clipChromaToGamut(planePointToOklch(anchor, wrapHue(guess.h + delta)));
+  const next = planePointToOklch({ h: guess.h, t: anchor.t }, clamp01(guess.L + delta));
   return sameColor(next, guess) ? null : next;
 }
 
@@ -215,78 +193,58 @@ export function nudgeHue(
 /* Pure painting                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Neutral hatch over the inert region — translucent, so it reads in both themes. */
-const INERT_R = 128;
-const INERT_G = 128;
-const INERT_B = 134;
-const INERT_ALPHA_A = 40;
-const INERT_ALPHA_B = 100;
-const HATCH_PERIOD = 10;
-
-/** Colour samples per repaint while a hue drag is in flight (~5ms). */
+/** Colour samples per repaint while a lightness drag is in flight (~5ms). */
 export const DRAFT_SAMPLES = 24_000;
 
 /** Colour samples for the settled repaint (~25ms, once). */
 export const FINAL_SAMPLES = 120_000;
 
 /**
- * Paint the plane into an RGBA buffer. Pure — no canvas, no DOM — so the gamut
- * boundary and the inert treatment are testable in happy-dom.
+ * Paint the plane into an RGBA buffer. Pure — no canvas, no DOM — so what the
+ * player is aiming at is testable in happy-dom.
  *
  * The field is sampled on a lattice whose spacing is chosen to hold the sample
  * count near `sampleBudget`, and each sample fills its block. A full-resolution
- * sweep is ~0.2µs per pixel, which is a 60ms repaint on a retina swatch — far
- * too slow to keep up with a hue drag, and the field is smooth enough that one
+ * sweep is ~0.2µs per pixel, which is a 60ms repaint on a retina swatch — too
+ * slow to keep up with a lightness drag, and the field is smooth enough that one
  * sample per CSS pixel is indistinguishable.
+ *
+ * Columns are the outer loop because the gamut ceiling depends on `(L, h)` and
+ * `L` is constant across the plane: one bisection per column of the lattice,
+ * not one per sample.
  */
 export function renderPlanePixels(
   width: number,
   height: number,
-  hue: number,
+  lightness: number,
   sampleBudget: number,
 ): Uint8ClampedArray {
   if (width <= 0 || height <= 0) return new Uint8ClampedArray(0);
 
   const pixels = new Uint8ClampedArray(width * height * 4);
-  const h = wrapHue(hue);
-  const scale = chromaAxisMax(h);
+  const L = clamp01(lightness);
   const step = Math.max(1, Math.ceil(Math.sqrt((width * height) / Math.max(1, sampleBudget))));
 
-  for (let blockY = 0; blockY < height; blockY += step) {
-    const rowEnd = Math.min(blockY + step, height);
-    const L = 1 - Math.min(blockY + step / 2, height) / height;
-    const boundary = scale > 0 ? (maxChroma(L, h) / scale) * width : 0;
+  for (let blockX = 0; blockX < width; blockX += step) {
+    const columnEnd = Math.min(blockX + step, width);
+    const h = wrapHue((Math.min(blockX + step / 2, width) / width) * 360);
+    const ceiling = maxChroma(L, h);
 
-    for (let blockX = 0; blockX < width; blockX += step) {
-      const columnEnd = Math.min(blockX + step, width);
-      const centre = Math.min(blockX + step / 2, width);
-      const inGamut = centre <= boundary;
-
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      if (inGamut) {
-        const sample = oklchToSrgb(oklch(L, (centre / width) * scale, h));
-        r = sample.r * 255;
-        g = sample.g * 255;
-        b = sample.b * 255;
-      }
+    for (let blockY = 0; blockY < height; blockY += step) {
+      const rowEnd = Math.min(blockY + step, height);
+      const t = 1 - Math.min(blockY + step / 2, height) / height;
+      const sample = oklchToSrgb(oklch(L, t * ceiling, h));
+      const r = sample.r * 255;
+      const g = sample.g * 255;
+      const b = sample.b * 255;
 
       for (let y = blockY; y < rowEnd; y += 1) {
         for (let x = blockX; x < columnEnd; x += 1) {
           const i = (y * width + x) * 4;
-          if (inGamut) {
-            pixels[i] = r;
-            pixels[i + 1] = g;
-            pixels[i + 2] = b;
-            pixels[i + 3] = 255;
-          } else {
-            pixels[i] = INERT_R;
-            pixels[i + 1] = INERT_G;
-            pixels[i + 2] = INERT_B;
-            pixels[i + 3] =
-              (x + y) % HATCH_PERIOD < HATCH_PERIOD / 2 ? INERT_ALPHA_A : INERT_ALPHA_B;
-          }
+          pixels[i] = r;
+          pixels[i + 1] = g;
+          pixels[i + 2] = b;
+          pixels[i + 3] = 255;
         }
       }
     }
@@ -296,16 +254,20 @@ export function renderPlanePixels(
 }
 
 /**
- * The hue slider track, recoloured to the current lightness and chroma
- * (research § Picker UX: a static rainbow misreports where the player is
- * heading). Chroma is clipped per stop so every stop is a colour sRGB can show.
+ * The lightness bar's track: the current hue and chroma fraction swept from
+ * black to white. Recoloured live rather than left a static grey ramp, because
+ * the bar's job is to answer "how bright is the colour I am aiming at" and a
+ * grey ramp misreports it (research § Picker UX).
+ *
+ * Every stop is `t · maxChroma(L, h)` and so in gamut; the ends are black and
+ * white, where no chroma exists.
  */
-export function hueTrackGradient(color: Oklch): string {
+export function lightnessTrackGradient(color: Oklch): string {
+  const point = planePointForColor(color);
   const stops: string[] = [];
   for (let i = 0; i <= 12; i += 1) {
-    const h = wrapHue(i * 30);
-    const stop = clipChromaToGamut(planePointToOklch(planePointForColor(color), h));
-    stops.push(`${oklchToCss(stop)} ${((i / 12) * 100).toFixed(2)}%`);
+    const fraction = i / 12;
+    stops.push(`${oklchToCss(planePointToOklch(point, fraction))} ${(fraction * 100).toFixed(2)}%`);
   }
   return `linear-gradient(to right, ${stops.join(", ")})`;
 }
@@ -319,7 +281,7 @@ const LOUPE_SIZE = 98;
 const LOUPE_OFFSET = 83;
 const LOUPE_ZOOM = 4;
 
-/** How long the plane stays at draft quality after the last hue change. */
+/** How long the plane stays at draft quality after the last lightness change. */
 const REFINE_MS = 120;
 
 /** The slice of a 2D context the plane painter uses. Narrow so tests can fake it. */
@@ -350,7 +312,7 @@ export type Picker = {
   destroy(): void;
 };
 
-type DragKind = "plane" | "hue";
+type DragKind = "plane" | "lightness";
 
 type Drag = {
   readonly kind: DragKind;
@@ -393,7 +355,7 @@ export function createPicker(
   const plane = element("div", "picker-plane");
   plane.tabIndex = -1;
   plane.setAttribute("role", "application");
-  plane.setAttribute("aria-label", "Lightness and chroma. Arrow keys nudge, shift for coarse.");
+  plane.setAttribute("aria-label", "Hue and chroma. Arrow keys nudge, shift for coarse.");
 
   const planeCanvas = element("canvas", "picker-plane-canvas");
   planeCanvas.setAttribute("aria-hidden", "true");
@@ -411,29 +373,29 @@ export function createPicker(
 
   plane.append(planeCanvas, cursor, loupe);
 
-  const hue = element("div", "picker-hue");
-  hue.tabIndex = -1;
-  hue.setAttribute("role", "slider");
-  hue.setAttribute("aria-label", "Hue");
-  hue.setAttribute("aria-orientation", "horizontal");
-  hue.setAttribute("aria-valuemin", "0");
-  hue.setAttribute("aria-valuemax", "360");
-  hue.setAttribute("aria-valuenow", "0");
+  const bar = element("div", "picker-lightness");
+  bar.tabIndex = -1;
+  bar.setAttribute("role", "slider");
+  bar.setAttribute("aria-label", "Lightness");
+  bar.setAttribute("aria-orientation", "horizontal");
+  bar.setAttribute("aria-valuemin", "0");
+  bar.setAttribute("aria-valuemax", "1");
+  bar.setAttribute("aria-valuenow", "0.5");
 
-  const hueTrack = element("div", "picker-hue-track");
-  const hueThumb = element("div", "picker-hue-thumb");
-  hue.append(hueTrack, hueThumb);
+  const barTrack = element("div", "picker-lightness-track");
+  const barThumb = element("div", "picker-lightness-thumb");
+  bar.append(barTrack, barThumb);
 
-  root.append(plane, hue);
+  root.append(plane, bar);
   slot.append(root);
 
   const planeContext = getContext(planeCanvas);
   const loupeContext = loupeCanvas.getContext("2d");
 
   let current: Oklch = oklch(0.5, 0, 0);
-  /** Where the player last put the cursor. Survives hue travel; see `nudgeHue`. */
-  let anchor: PlanePoint = { u: 0, v: 0.5 };
-  let paintedHue: number | null = null;
+  /** Where the player last put the cursor. Survives the ends of the bar. */
+  let anchor: PlanePoint = { h: 0, t: 0 };
+  let paintedLightness: number | null = null;
   let paintedDraft = false;
   let refineTimer: ReturnType<typeof setTimeout> | undefined;
   let drag: Drag | null = null;
@@ -449,9 +411,9 @@ export function createPicker(
     if (width <= 0 || height <= 0) return;
 
     const image = planeContext.createImageData(width, height);
-    image.data.set(renderPlanePixels(width, height, current.h, budget));
+    image.data.set(renderPlanePixels(width, height, current.L, budget));
     planeContext.putImageData(image, 0, 0);
-    paintedHue = current.h;
+    paintedLightness = current.L;
     paintedDraft = budget < FINAL_SAMPLES;
   }
 
@@ -470,17 +432,17 @@ export function createPicker(
   }
 
   /**
-   * The gradient depends on hue alone, so a plane drag never repaints it — only
-   * the cursor moves. A hue drag paints at draft quality and refines once it
-   * settles, because a full-resolution sweep cannot keep up with a finger.
+   * The plane's two axes are its own, so a drag across it never repaints — only
+   * the cursor moves. A lightness drag paints at draft quality and refines once
+   * it settles, because a full-resolution sweep cannot keep up with a finger.
    */
-  function repaintIfHueChanged(): void {
-    if (paintedHue === current.h) return;
+  function repaintIfLightnessChanged(): void {
+    if (paintedLightness === current.L) return;
     paint(drag === null ? FINAL_SAMPLES : DRAFT_SAMPLES);
     if (paintedDraft) scheduleRefine();
   }
 
-  function paintLoupe(point: PlanePoint): void {
+  function paintLoupe(at: PlaneFraction): void {
     if (loupeContext === null) return;
     const width = planeCanvas.width;
     const height = planeCanvas.height;
@@ -492,8 +454,8 @@ export function createPicker(
     loupeContext.imageSmoothingEnabled = false;
     loupeContext.drawImage(
       planeCanvas,
-      point.u * width - size / 2,
-      (1 - point.v) * height - size / 2,
+      at.x * width - size / 2,
+      at.y * height - size / 2,
       size,
       size,
       0,
@@ -513,33 +475,33 @@ export function createPicker(
 
   function positionLoupe(): void {
     if (drag === null || !drag.touch || drag.kind !== "plane") return;
-    const point = planePointForColor(current);
-    const x = point.u * drag.rect.width;
-    const y = (1 - point.v) * drag.rect.height;
+    const at = planeFraction(planePointForColor(current));
+    const x = at.x * drag.rect.width;
+    const y = at.y * drag.rect.height;
     const half = LOUPE_SIZE / 2;
     const clampedX = Math.min(Math.max(x, half), Math.max(half, drag.rect.width - half));
     const above = y - LOUPE_OFFSET;
     loupe.style.left = `${clampedX.toFixed(1)}px`;
     loupe.style.top = `${(above >= half ? above : y + LOUPE_OFFSET).toFixed(1)}px`;
     setFillColor(loupe, oklchToCss(current));
-    paintLoupe(point);
+    paintLoupe(at);
   }
 
   function applyValue(color: Oklch): void {
     current = color;
-    const point = planePointForColor(color);
+    const at = planeFraction(planePointForColor(color));
     const css = oklchToCss(color);
 
-    cursor.style.left = `${(point.u * 100).toFixed(3)}%`;
-    cursor.style.top = `${((1 - point.v) * 100).toFixed(3)}%`;
+    cursor.style.left = `${(at.x * 100).toFixed(3)}%`;
+    cursor.style.top = `${(at.y * 100).toFixed(3)}%`;
     setFillColor(cursor, css);
 
-    hueThumb.style.left = `${(hueSliderFraction(color.h) * 100).toFixed(3)}%`;
-    hue.setAttribute("aria-valuenow", color.h.toFixed(1));
-    hue.setAttribute("aria-valuetext", `${color.h.toFixed(1)} degrees`);
-    hueTrack.style.setProperty("--hue-track", hueTrackGradient(color));
+    barThumb.style.left = `${(clamp01(color.L) * 100).toFixed(3)}%`;
+    bar.setAttribute("aria-valuenow", color.L.toFixed(3));
+    bar.setAttribute("aria-valuetext", `${Math.round(clamp01(color.L) * 100)} percent`);
+    barTrack.style.setProperty("--lightness-track", lightnessTrackGradient(color));
 
-    repaintIfHueChanged();
+    repaintIfLightnessChanged();
   }
 
   function emit(color: Oklch): void {
@@ -548,22 +510,21 @@ export function createPicker(
   }
 
   function surfaceOf(kind: DragKind): HTMLElement {
-    return kind === "plane" ? plane : hue;
+    return kind === "plane" ? plane : bar;
   }
 
   /**
-   * Pointer position → the colour it selects, or `null` where nothing is
-   * selectable. On the plane that is the inert out-of-gamut region; on the hue
-   * slider every position selects, with chroma rebuilt from `anchor`.
+   * Pointer position → the colour it selects. Every position on both surfaces
+   * selects: the plane is in gamut everywhere (ADR 0007), and the bar rebuilds
+   * chroma from `anchor` so the ends of its travel do not eat it.
    */
-  function valueAt(kind: DragKind, rect: Rect, x: number, y: number): Oklch | null {
+  function valueAt(kind: DragKind, rect: Rect, x: number, y: number): Oklch {
     if (kind === "plane") {
       const point = planePointFromPointer(x, y, rect);
-      const color = selectAtPlanePoint(point, current.h);
-      if (color !== null) anchor = point;
-      return color;
+      anchor = point;
+      return planePointToOklch(point, current.L);
     }
-    return clipChromaToGamut(planePointToOklch(anchor, hueFromPointer(x, rect)));
+    return planePointToOklch({ h: current.h, t: anchor.t }, lightnessFromPointer(x, rect));
   }
 
   function onPointerDown(kind: DragKind, event: PointerEvent): void {
@@ -586,10 +547,8 @@ export function createPicker(
     // follows so the player can see where they landed, but nothing is reported
     // until the drag streams or the finger lifts.
     const next = valueAt(kind, drag.rect, event.clientX, event.clientY);
-    if (next !== null) {
-      drag.value = next;
-      applyValue(next);
-    }
+    drag.value = next;
+    applyValue(next);
     if (drag.touch && kind === "plane") {
       loupe.hidden = false;
       positionLoupe();
@@ -599,7 +558,6 @@ export function createPicker(
   function onPointerMove(event: PointerEvent): void {
     if (drag === null || event.pointerId !== drag.pointerId) return;
     const next = valueAt(drag.kind, drag.rect, event.clientX, event.clientY);
-    if (next === null) return;
     drag.value = next;
     applyValue(next);
     positionLoupe();
@@ -615,10 +573,9 @@ export function createPicker(
 
     // Take-off selection (Potter/Weldon/Shneiderman 1988): the value that counts
     // is the one under the finger at lift, not at landing.
-    const lift = cancelled
-      ? null
+    const value = cancelled
+      ? finished.restore
       : valueAt(finished.kind, finished.rect, event.clientX, event.clientY);
-    const value = cancelled ? finished.restore : (lift ?? finished.value);
 
     drag = null;
     loupe.hidden = true;
@@ -640,7 +597,7 @@ export function createPicker(
     const next =
       kind === "plane"
         ? nudgeInPlane(current, event.key, event.shiftKey)
-        : nudgeHue(current, anchor, event.key, event.shiftKey);
+        : nudgeLightness(current, anchor, event.key, event.shiftKey);
     if (next === null) return;
     event.preventDefault();
     if (kind === "plane") anchor = planePointForColor(next);
@@ -652,21 +609,21 @@ export function createPicker(
   const planeDown = (event: PointerEvent): void => {
     onPointerDown("plane", event);
   };
-  const hueDown = (event: PointerEvent): void => {
-    onPointerDown("hue", event);
+  const barDown = (event: PointerEvent): void => {
+    onPointerDown("lightness", event);
   };
   const planeKey = (event: KeyboardEvent): void => {
     onKeyDown("plane", event);
   };
-  const hueKey = (event: KeyboardEvent): void => {
-    onKeyDown("hue", event);
+  const barKey = (event: KeyboardEvent): void => {
+    onKeyDown("lightness", event);
   };
 
   plane.addEventListener("pointerdown", planeDown);
-  hue.addEventListener("pointerdown", hueDown);
+  bar.addEventListener("pointerdown", barDown);
   plane.addEventListener("keydown", planeKey);
-  hue.addEventListener("keydown", hueKey);
-  for (const surface of [plane, hue]) {
+  bar.addEventListener("keydown", barKey);
+  for (const surface of [plane, bar]) {
     surface.addEventListener("pointermove", onPointerMove);
     surface.addEventListener("pointerup", onPointerUp);
     surface.addEventListener("pointercancel", onPointerCancel);
@@ -684,7 +641,7 @@ export function createPicker(
       if (width === planeCanvas.width && height === planeCanvas.height) continue;
       planeCanvas.width = width;
       planeCanvas.height = height;
-      paintedHue = null;
+      paintedLightness = null;
       paint(FINAL_SAMPLES);
     }
   });
@@ -697,7 +654,7 @@ export function createPicker(
       // An invisible picker must not be tab-reachable; the slot only takes
       // `pointer-events` away, which focus does not go through.
       plane.tabIndex = nextActive ? 0 : -1;
-      hue.tabIndex = nextActive ? 0 : -1;
+      bar.tabIndex = nextActive ? 0 : -1;
       root.setAttribute("aria-hidden", nextActive ? "false" : "true");
     }
 
@@ -709,8 +666,8 @@ export function createPicker(
     if (key === renderedKey) return;
     renderedKey = key;
 
-    // Only a change we did not cause moves the anchor: our own echo would drag
-    // it down a step every time chroma got clipped at a starved hue.
+    // Only a change we did not cause moves the anchor: our own echo would reset
+    // it every time the bar reached an end and the fraction became unreadable.
     if (key.slice(2) !== sentKey) anchor = planePointForColor(state.guess);
     applyValue(state.guess);
   }
@@ -719,10 +676,10 @@ export function createPicker(
     clearRefine();
     observer.disconnect();
     plane.removeEventListener("pointerdown", planeDown);
-    hue.removeEventListener("pointerdown", hueDown);
+    bar.removeEventListener("pointerdown", barDown);
     plane.removeEventListener("keydown", planeKey);
-    hue.removeEventListener("keydown", hueKey);
-    for (const surface of [plane, hue]) {
+    bar.removeEventListener("keydown", barKey);
+    for (const surface of [plane, bar]) {
       surface.removeEventListener("pointermove", onPointerMove);
       surface.removeEventListener("pointerup", onPointerUp);
       surface.removeEventListener("pointercancel", onPointerCancel);

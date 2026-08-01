@@ -16,8 +16,8 @@ The whole game lives or dies on three things:
    same rounded corners, same position. If the picker appears somewhere else, the
    player gets a spatial anchor and the memory task changes character. This is a
    hard geometric requirement, and it is asserted in e2e tests (§9.4).
-   The dissolve passes through a neutral grey mask so the afterimage from five
-   seconds of fixation doesn't bias the pick — see ADR 0006.
+   The dissolve is a single cross-fade straight into the picker; it briefly
+   passed through a neutral mask, see ADR 0006 and its reversal in ADR 0008.
 2. **The scoring feels fair.** Naive RGB Euclidean distance does not match human
    perception — two blues 30 units apart look identical while two greens 30 units
    apart look obviously different. Players *will* notice and will call the game
@@ -64,11 +64,11 @@ Two regions, always both visible, never requiring a scroll:
  │   (same rect, always)    │  ├───────────┤
  │                          │  │  readout  │   ← hex + coords, monospace
  └──────────────────────────┘  └───────────┘
-        ▲ hue slider directly beneath, same width
+        ▲ lightness bar directly beneath, same width (ADR 0007)
 ```
 
 - **≥ 640px wide:** preview sits to the right of the swatch, as specified.
-- **< 640px (portrait phones):** preview moves *below* the swatch and hue slider,
+- **< 640px (portrait phones):** preview moves *below* the swatch and lightness bar,
   full width, min-height 20vh. Both remain on screen simultaneously — this is a
   layout constraint, not a suggestion. Verified in e2e at iPhone 14 viewport.
 - The swatch is a fixed aspect ratio (1:1) sized by `min(70vw, 50vh)` so it never
@@ -151,7 +151,7 @@ someone with total color blindness. What we *will* do:
 
 - **Numeric readout** of the current pick (hex + coordinates), always visible, so
   the picker is operable and verifiable without relying solely on the rendered color.
-- **Full keyboard control**: the picker plane and hue slider are focusable, arrow
+- **Full keyboard control**: the picker plane and lightness bar are focusable, arrow
   keys nudge by 1 unit, shift+arrow by 10, Enter confirms. Visible focus rings.
 - **`prefers-reduced-motion: reduce`** → the 450ms dissolve becomes an instant
   swap and the countdown ring stops animating (the numeric countdown remains).

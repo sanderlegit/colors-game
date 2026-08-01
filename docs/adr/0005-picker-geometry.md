@@ -1,7 +1,12 @@
 # 0005 — OKLCh L×C plane picker, and the hue slider is the real problem
 
-Date: 2026-08-01 · Status: accepted
+Date: 2026-08-01 · Status: **superseded by [ADR 0007](0007-picker-shows-every-hue.md)**
 Research: `docs/research/color-science.md` § Picker UX
+
+> Superseded because this decision optimised per-pixel scoring fairness and
+> ignored searchability: with hue behind a slider, a player cannot find the
+> colour they memorised. The measurements below still stand and 0007 explains
+> which of them survive. Take-off selection and the touch loupe are retained.
 
 ## Context
 

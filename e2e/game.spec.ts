@@ -7,7 +7,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
  */
 
 const MEMORIZE_MS = 5000;
-const DISSOLVE_MS = 450 + 400 + 450; // fade, mask hold, fade (ADR 0006)
+const DISSOLVE_MS = 450;
 
 /** Start a game and wait until the picker is live. */
 async function playToPicking(page: Page): Promise<void> {
@@ -54,7 +54,7 @@ test("the picker covers exactly the same rect as the swatch", async ({ page }) =
 test("the target color is not in the DOM once picking starts", async ({ page }) => {
   await playToPicking(page);
 
-  // The fill layer's color is dropped as soon as the mask covers it (ADR 0006).
+  // The fill layer's color is dropped when the dissolve completes.
   const fillStyle = await page.locator(".swatch-fill").getAttribute("style");
   expect(fillStyle ?? "").not.toContain("oklch");
 
@@ -112,8 +112,8 @@ test("a full round: memorize, pick, confirm, score", async ({ page }) => {
   const plane = page.locator(".picker-plane");
   const rect = await box(plane);
 
-  // Drag inside the plane. Starting near the low-chroma edge keeps the whole
-  // path inside the in-gamut region at any hue.
+  // Drag inside the plane. Every point is in gamut since ADR 0007, so any path
+  // works.
   await page.mouse.move(rect.x + rect.width * 0.2, rect.y + rect.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(rect.x + rect.width * 0.35, rect.y + rect.height * 0.45, { steps: 8 });

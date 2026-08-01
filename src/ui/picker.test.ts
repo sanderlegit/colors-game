@@ -2,31 +2,30 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { oklchToSrgb } from "@/color/convert";
 import { oklchToCss } from "@/color/format";
-import { clipChromaToGamut, isInGamut, maxChroma } from "@/color/gamut";
+import { isInGamut, maxChroma } from "@/color/gamut";
 import { type Oklch, oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 import { initialState } from "@/domain/state";
 import {
+  CHROMA_FRACTION_NUDGE,
   COARSE_MULTIPLIER,
-  chromaAxisMax,
   createPicker,
   DRAFT_SAMPLES,
   FINAL_SAMPLES,
   HUE_NUDGE_DEG,
-  hueFromPointer,
-  hueSliderFraction,
-  hueTrackGradient,
-  nudgeHue,
+  LIGHTNESS_NUDGE,
+  lightnessFromPointer,
+  lightnessTrackGradient,
   nudgeInPlane,
-  PLANE_NUDGE,
+  nudgeLightness,
   type PlaneContext,
   type PlanePoint,
+  planeFraction,
   planePointForColor,
   planePointFromPointer,
   planePointToOklch,
   type Rect,
   renderPlanePixels,
-  selectAtPlanePoint,
   wrapHue,
 } from "@/ui/picker";
 import type { PickerFactory } from "@/ui/render";
@@ -47,55 +46,28 @@ describe("wrapHue", () => {
   });
 });
 
-describe("chromaAxisMax", () => {
-  // Reference points from docs/research/color-science.md §5.2, whose table is a
-  // coarse (L, h) grid — the cusp between grid rows is at least as high.
-  it("finds the cusp chroma of the hue leaf", () => {
-    expect(chromaAxisMax(270)).toBeGreaterThan(0.29);
-    expect(chromaAxisMax(270)).toBeLessThan(0.34);
-    expect(chromaAxisMax(150)).toBeGreaterThan(0.23);
-  });
-
-  it("reports teal/azure as the most gamut-starved direction", () => {
-    // §5.2: "Teal/azure (h ≈ 200°) is the most gamut-starved direction at every
-    // lightness."
-    expect(chromaAxisMax(200)).toBeLessThan(chromaAxisMax(270));
-    expect(chromaAxisMax(200)).toBeLessThan(chromaAxisMax(30));
-    expect(chromaAxisMax(200)).toBeLessThan(chromaAxisMax(150));
-  });
-
-  it("bounds every in-gamut chroma on its hue leaf", () => {
-    fc.assert(
-      fc.property(
-        fc.double({ min: 0.02, max: 0.98, noNaN: true }),
-        fc.double({ min: 0, max: 360, noNaN: true }),
-        (L, h) => {
-          expect(maxChroma(L, h)).toBeLessThanOrEqual(chromaAxisMax(h) + 1e-6);
-        },
-      ),
-      { numRuns: 60 },
-    );
-  });
-});
-
 describe("planePointFromPointer", () => {
-  it("puts chroma on x and lightness on y, with y inverted", () => {
-    expect(planePointFromPointer(0, 200, RECT)).toEqual({ u: 0, v: 0 });
-    expect(planePointFromPointer(300, 0, RECT)).toEqual({ u: 1, v: 1 });
-    expect(planePointFromPointer(150, 100, RECT)).toEqual({ u: 0.5, v: 0.5 });
+  it("puts hue on x and the chroma fraction on y, saturated at the top", () => {
+    expect(planePointFromPointer(0, 200, RECT)).toEqual({ h: 0, t: 0 });
+    expect(planePointFromPointer(150, 0, RECT)).toEqual({ h: 180, t: 1 });
+    expect(planePointFromPointer(75, 100, RECT)).toEqual({ h: 90, t: 0.5 });
+  });
+
+  it("wraps the right edge onto the left — the hue axis is a circle", () => {
+    expect(planePointFromPointer(300, 100, RECT).h).toBe(0);
   });
 
   it("honours the rect origin and clamps outside it", () => {
     const offset: Rect = { left: 40, top: 10, width: 300, height: 200 };
-    expect(planePointFromPointer(190, 110, offset)).toEqual({ u: 0.5, v: 0.5 });
-    expect(planePointFromPointer(-100, 999, offset)).toEqual({ u: 0, v: 0 });
-    expect(planePointFromPointer(9999, -999, offset)).toEqual({ u: 1, v: 1 });
+    expect(planePointFromPointer(190, 110, offset)).toEqual({ h: 180, t: 0.5 });
+    expect(planePointFromPointer(-100, 999, offset)).toEqual({ h: 0, t: 0 });
+    expect(planePointFromPointer(9999, -999, offset)).toEqual({ h: 0, t: 1 });
   });
 
   it("survives a zero-sized rect", () => {
     expect(planePointFromPointer(10, 10, { left: 0, top: 0, width: 0, height: 0 })).toEqual({
-      u: 0,
-      v: 0,
+      h: 0,
+      t: 0,
     });
   });
 });
@@ -104,123 +76,177 @@ describe("plane ↔ OKLCh", () => {
   it("round-trips a plane position through a colour", () => {
     fc.assert(
       fc.property(
-        fc.double({ min: 0, max: 1, noNaN: true }),
-        fc.double({ min: 0, max: 1, noNaN: true }),
         fc.double({ min: 0, max: 359.99, noNaN: true }),
-        (u, v, h) => {
-          const back = planePointForColor(planePointToOklch({ u, v }, h));
-          expect(back.u).toBeCloseTo(u, 10);
-          expect(back.v).toBeCloseTo(v, 10);
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        fc.double({ min: 0.05, max: 0.95, noNaN: true }),
+        (h, t, L) => {
+          const back = planePointForColor(planePointToOklch({ h, t }, L));
+          expect(back.h).toBeCloseTo(h, 10);
+          expect(back.t).toBeCloseTo(t, 10);
         },
       ),
       { numRuns: 100 },
     );
   });
 
-  it("puts lightness on v and normalized chroma on u", () => {
-    const color = planePointToOklch({ u: 0.5, v: 0.25 }, 270);
+  it("takes chroma as a fraction of what the gamut offers at (L, h)", () => {
+    const color = planePointToOklch({ h: 270, t: 0.5 }, 0.25);
     expect(color.L).toBe(0.25);
     expect(color.h).toBe(270);
-    expect(color.c).toBeCloseTo(0.5 * chromaAxisMax(270), 12);
+    expect(color.c).toBeCloseTo(0.5 * maxChroma(0.25, 270), 12);
+  });
+
+  it("puts neutral grey along the bottom edge at every hue", () => {
+    for (let h = 0; h < 360; h += 30) {
+      expect(planePointToOklch({ h, t: 0 }, 0.5).c).toBe(0);
+    }
   });
 });
 
-describe("selectAtPlanePoint", () => {
-  it("never returns a colour sRGB cannot show", () => {
+describe("the plane is in gamut everywhere (ADR 0007)", () => {
+  it("never names a colour sRGB cannot show", () => {
     fc.assert(
       fc.property(
-        fc.double({ min: 0, max: 1, noNaN: true }),
-        fc.double({ min: 0.01, max: 0.99, noNaN: true }),
         fc.double({ min: 0, max: 359.99, noNaN: true }),
-        (u, v, h) => {
-          const color = selectAtPlanePoint({ u, v }, h);
-          if (color !== null) expect(isInGamut(color)).toBe(true);
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        fc.double({ min: 0.02, max: 0.98, noNaN: true }),
+        (h, t, L) => {
+          expect(isInGamut(planePointToOklch({ h, t }, L))).toBe(true);
         },
       ),
-      { numRuns: 120 },
+      { numRuns: 150 },
     );
   });
 
-  it("is inert in the out-of-gamut region rather than clamping into it", () => {
-    // Light and very saturated at once: nothing sRGB can render.
-    expect(selectAtPlanePoint({ u: 1, v: 0.95 }, 270)).toBeNull();
-    expect(selectAtPlanePoint({ u: 0.05, v: 0.5 }, 270)).not.toBeNull();
+  it("has no dead zone: the top corners select like anywhere else", () => {
+    // The whole rectangle is live, which is the point of the fraction axis —
+    // ADR 0005's inert region covered ~half the plane and is gone.
+    for (const point of [
+      { h: 0, t: 1 },
+      { h: 359.9, t: 1 },
+      { h: 200, t: 1 },
+      { h: 90, t: 1 },
+    ] satisfies PlanePoint[]) {
+      expect(isInGamut(planePointToOklch(point, 0.95))).toBe(true);
+      expect(isInGamut(planePointToOklch(point, 0.05))).toBe(true);
+    }
   });
 
-  it("maps distinct selectable positions to distinct colours", () => {
-    // The whole reason the dead zone is honest rather than clamped (ADR 0005):
-    // clamping would collapse many cursor positions onto one colour.
+  it("maps distinct positions to distinct colours across the full width", () => {
     const seen = new Set<string>();
-    for (let i = 0; i <= 40; i += 1) {
-      const color = selectAtPlanePoint({ u: i / 40, v: 0.5 }, 270);
-      if (color === null) continue;
-      const key = oklchToCss(color);
+    for (let i = 0; i < 40; i += 1) {
+      const key = oklchToCss(planePointToOklch({ h: (i / 40) * 360, t: 0.8 }, 0.6));
       expect(seen.has(key)).toBe(false);
       seen.add(key);
     }
-    expect(seen.size).toBeGreaterThan(20);
+    expect(seen.size).toBe(40);
+  });
+
+  it("raises chroma monotonically up the y axis", () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 0, max: 359.99, noNaN: true }),
+        fc.double({ min: 0.1, max: 0.9, noNaN: true }),
+        (h, L) => {
+          let previous = -1;
+          for (let i = 0; i <= 10; i += 1) {
+            const c = planePointToOklch({ h, t: i / 10 }, L).c;
+            expect(c).toBeGreaterThanOrEqual(previous);
+            previous = c;
+          }
+        },
+      ),
+      { numRuns: 40 },
+    );
   });
 });
 
-describe("hue slider mapping", () => {
-  it("runs 0..360 across the track", () => {
-    expect(hueFromPointer(0, RECT)).toBe(0);
-    expect(hueFromPointer(150, RECT)).toBe(180);
-    // The right edge is 360°, which is 0° — the track is a circle.
-    expect(hueFromPointer(300, RECT)).toBe(0);
-    expect(hueFromPointer(-50, RECT)).toBe(0);
+describe("planeFraction", () => {
+  it("places hue across the width and t upward from the bottom", () => {
+    expect(planeFraction({ h: 0, t: 0 })).toEqual({ x: 0, y: 1 });
+    expect(planeFraction({ h: 180, t: 1 })).toEqual({ x: 0.5, y: 0 });
+    expect(planeFraction({ h: 90, t: 0.25 })).toEqual({ x: 0.25, y: 0.75 });
   });
 
-  it("round-trips through the thumb fraction", () => {
+  it("inverts planePointFromPointer on the unit rect", () => {
     fc.assert(
-      fc.property(fc.double({ min: 0, max: 359.99, noNaN: true }), (h) => {
-        const x = hueSliderFraction(h) * RECT.width + RECT.left;
-        expect(hueFromPointer(x, RECT)).toBeCloseTo(h, 8);
-      }),
+      fc.property(
+        fc.double({ min: 0, max: 299.99, noNaN: true }),
+        fc.double({ min: 0, max: 200, noNaN: true }),
+        (x, y) => {
+          const at = planeFraction(planePointFromPointer(x, y, RECT));
+          expect(at.x * RECT.width).toBeCloseTo(x, 8);
+          expect(at.y * RECT.height).toBeCloseTo(y, 8);
+        },
+      ),
       { numRuns: 80 },
     );
   });
 });
 
+describe("lightnessFromPointer", () => {
+  it("runs dim to bright across the bar", () => {
+    const bar: Rect = { left: 0, top: 200, width: 300, height: 44 };
+    expect(lightnessFromPointer(0, bar)).toBe(0);
+    expect(lightnessFromPointer(150, bar)).toBe(0.5);
+    expect(lightnessFromPointer(300, bar)).toBe(1);
+    expect(lightnessFromPointer(-50, bar)).toBe(0);
+    expect(lightnessFromPointer(9999, bar)).toBe(1);
+    expect(lightnessFromPointer(10, { left: 0, top: 0, width: 0, height: 0 })).toBe(0);
+  });
+});
+
 describe("nudgeInPlane", () => {
-  const base = oklch(0.5, 0.05, 270);
+  const base = planePointToOklch({ h: 270, t: 0.5 }, 0.5);
 
   it("ignores keys it does not own", () => {
     expect(nudgeInPlane(base, "Enter", false)).toBeNull();
     expect(nudgeInPlane(base, "a", false)).toBeNull();
   });
 
-  it("moves one normalized step per arrow, ten with shift", () => {
+  it("moves hue sideways, one step per arrow and ten with shift", () => {
     const right = nudgeInPlane(base, "ArrowRight", false);
     const coarse = nudgeInPlane(base, "ArrowRight", true);
-    if (right === null || coarse === null) throw new Error("expected a move");
+    const left = nudgeInPlane(base, "ArrowLeft", false);
+    if (right === null || coarse === null || left === null) throw new Error("expected a move");
 
-    const scale = chromaAxisMax(270);
-    expect(right.c - base.c).toBeCloseTo(PLANE_NUDGE * scale, 10);
-    expect(coarse.c - base.c).toBeCloseTo(PLANE_NUDGE * COARSE_MULTIPLIER * scale, 10);
+    expect(right.h).toBeCloseTo(270 + HUE_NUDGE_DEG, 10);
+    expect(coarse.h).toBeCloseTo(270 + HUE_NUDGE_DEG * COARSE_MULTIPLIER, 10);
+    expect(left.h).toBeCloseTo(270 - HUE_NUDGE_DEG, 10);
     expect(right.L).toBe(base.L);
-    expect(right.h).toBe(base.h);
   });
 
-  it("moves lightness on the vertical arrows", () => {
+  it("keeps the chroma fraction across a hue move rather than the chroma", () => {
+    const right = nudgeInPlane(base, "ArrowRight", true);
+    if (right === null) throw new Error("expected a move");
+    expect(planePointForColor(right).t).toBeCloseTo(0.5, 10);
+  });
+
+  it("wraps across the seam", () => {
+    const near = planePointToOklch({ h: 359.8, t: 0.5 }, 0.5);
+    const next = nudgeInPlane(near, "ArrowRight", false);
+    if (next === null) throw new Error("expected a move");
+    expect(next.h).toBeCloseTo(0.3, 8);
+  });
+
+  it("moves the chroma fraction on the vertical arrows", () => {
     const up = nudgeInPlane(base, "ArrowUp", false);
     const down = nudgeInPlane(base, "ArrowDown", false);
     if (up === null || down === null) throw new Error("expected a move");
-    expect(up.L).toBeCloseTo(base.L + PLANE_NUDGE, 10);
-    expect(down.L).toBeCloseTo(base.L - PLANE_NUDGE, 10);
+    expect(planePointForColor(up).t).toBeCloseTo(0.5 + CHROMA_FRACTION_NUDGE, 8);
+    expect(planePointForColor(down).t).toBeCloseTo(0.5 - CHROMA_FRACTION_NUDGE, 8);
+    expect(up.h).toBe(base.h);
   });
 
-  it("reports no move at the edge of the plane", () => {
-    expect(nudgeInPlane(oklch(0.5, 0, 270), "ArrowLeft", false)).toBeNull();
-    expect(nudgeInPlane(oklch(0, 0, 270), "ArrowDown", false)).toBeNull();
+  it("reports no move at the top and bottom of the plane", () => {
+    expect(nudgeInPlane(planePointToOklch({ h: 270, t: 1 }, 0.5), "ArrowUp", false)).toBeNull();
+    expect(nudgeInPlane(planePointToOklch({ h: 270, t: 0 }, 0.5), "ArrowDown", false)).toBeNull();
   });
 
-  it("stays in gamut — a nudge slides along the cusp rather than off it", () => {
-    // Unlike the pointer path, keyboard is a relative move with no cursor-to-
-    // colour ambiguity, so clipping is the right answer instead of refusal.
-    let color = oklch(0.5, chromaAxisMax(270) * 0.99, 270);
-    for (let i = 0; i < 40; i += 1) {
-      const next = nudgeInPlane(color, "ArrowUp", true) ?? nudgeInPlane(color, "ArrowLeft", true);
+  it("stays in gamut wherever it walks", () => {
+    let color = planePointToOklch({ h: 200, t: 0.99 }, 0.5);
+    for (let i = 0; i < 60; i += 1) {
+      const next = nudgeInPlane(color, "ArrowRight", true) ?? nudgeInPlane(color, "ArrowUp", true);
       if (next === null) break;
       color = next;
       expect(isInGamut(color)).toBe(true);
@@ -228,43 +254,54 @@ describe("nudgeInPlane", () => {
   });
 });
 
-describe("nudgeHue", () => {
-  const anchor: PlanePoint = { u: 0.9, v: 0.55 };
-  const base = planePointToOklch(anchor, 270);
+describe("nudgeLightness", () => {
+  const anchor: PlanePoint = { h: 270, t: 0.9 };
+  const base = planePointToOklch(anchor, 0.55);
 
-  it("moves half a degree per arrow, five with shift", () => {
-    const right = nudgeHue(base, anchor, "ArrowRight", false);
-    const coarse = nudgeHue(base, anchor, "ArrowRight", true);
+  it("moves one step per arrow, ten with shift", () => {
+    const right = nudgeLightness(base, anchor, "ArrowRight", false);
+    const coarse = nudgeLightness(base, anchor, "ArrowRight", true);
     if (right === null || coarse === null) throw new Error("expected a move");
-    expect(right.h).toBeCloseTo(270 + HUE_NUDGE_DEG, 10);
-    expect(coarse.h).toBeCloseTo(270 + HUE_NUDGE_DEG * COARSE_MULTIPLIER, 10);
+    expect(right.L).toBeCloseTo(0.55 + LIGHTNESS_NUDGE, 10);
+    expect(coarse.L).toBeCloseTo(0.55 + LIGHTNESS_NUDGE * COARSE_MULTIPLIER, 10);
+    expect(right.h).toBe(base.h);
   });
 
-  it("wraps across the seam", () => {
-    const near = planePointToOklch(anchor, 359.8);
-    const next = nudgeHue(near, anchor, "ArrowRight", false);
-    if (next === null) throw new Error("expected a move");
-    expect(next.h).toBeCloseTo(0.3, 8);
+  it("stops at both ends of the bar", () => {
+    const white = planePointToOklch(anchor, 1);
+    const black = planePointToOklch(anchor, 0);
+    expect(nudgeLightness(white, anchor, "ArrowRight", false)).toBeNull();
+    expect(nudgeLightness(black, anchor, "ArrowLeft", false)).toBeNull();
   });
 
-  it("rebuilds chroma from the anchor, so hue travel does not ratchet it down", () => {
-    // 200° is the most gamut-starved hue, so a colour parked there has had most
-    // of its chroma clipped away. Walking out of it one step at a time has to
-    // land exactly where a single jump would — otherwise each step would clip
-    // the already-clipped chroma and the plane would drain to grey.
-    let color = clipChromaToGamut(planePointToOklch(anchor, 200));
-    for (let i = 0; i < 20; i += 1) {
-      const next = nudgeHue(color, anchor, "ArrowRight", true);
-      if (next !== null) color = next;
+  it("rebuilds chroma from the anchor, so a trip to white does not drain it", () => {
+    // At L = 1 every colour is white and the fraction is unrecoverable from the
+    // guess. Rebuilding from the anchor is what lets the player come back down
+    // to the saturation they had, instead of to grey.
+    const coarse = LIGHTNESS_NUDGE * COARSE_MULTIPLIER;
+    let color = base;
+    for (let i = 0; i < 60; i += 1) {
+      color = nudgeLightness(color, anchor, "ArrowRight", true) ?? color;
     }
+    expect(color.L).toBe(1);
+    expect(color.c).toBe(0);
 
-    expect(color.h).toBeCloseTo(200 + 20 * HUE_NUDGE_DEG * COARSE_MULTIPLIER, 6);
-    expect(color.c).toBeCloseTo(clipChromaToGamut(planePointToOklch(anchor, color.h)).c, 10);
-    expect(color.c).toBeGreaterThan(planePointToOklch(anchor, 200).c * 0.5);
+    for (let i = 0; i < 20; i += 1) {
+      color = nudgeLightness(color, anchor, "ArrowLeft", true) ?? color;
+    }
+    expect(color.L).toBeCloseTo(1 - 20 * coarse, 8);
+    expect(planePointForColor(color).t).toBeCloseTo(anchor.t, 8);
+  });
+
+  it("keeps the guess's own hue — the plane owns that axis", () => {
+    const moved = oklch(base.L, base.c, 30);
+    const next = nudgeLightness(moved, anchor, "ArrowRight", false);
+    if (next === null) throw new Error("expected a move");
+    expect(next.h).toBe(30);
   });
 
   it("ignores keys it does not own", () => {
-    expect(nudgeHue(base, anchor, "Home", false)).toBeNull();
+    expect(nudgeLightness(base, anchor, "Home", false)).toBeNull();
   });
 });
 
@@ -274,26 +311,24 @@ describe("nudgeHue", () => {
 
 describe("renderPlanePixels", () => {
   it("returns an empty buffer for a zero-sized canvas", () => {
-    expect(renderPlanePixels(0, 10, 270, FINAL_SAMPLES)).toHaveLength(0);
-    expect(renderPlanePixels(10, 0, 270, FINAL_SAMPLES)).toHaveLength(0);
+    expect(renderPlanePixels(0, 10, 0.5, FINAL_SAMPLES)).toHaveLength(0);
+    expect(renderPlanePixels(10, 0, 0.5, FINAL_SAMPLES)).toHaveLength(0);
   });
 
   it("fills exactly one RGBA quad per pixel", () => {
-    expect(renderPlanePixels(8, 6, 270, FINAL_SAMPLES)).toHaveLength(8 * 6 * 4);
+    expect(renderPlanePixels(8, 6, 0.5, FINAL_SAMPLES)).toHaveLength(8 * 6 * 4);
   });
 
-  it("paints in-gamut pixels with the colour they select", () => {
+  it("paints each pixel the colour that pixel selects", () => {
     const width = 40;
     const height = 20;
-    const hue = 270;
-    const pixels = renderPlanePixels(width, height, hue, FINAL_SAMPLES);
+    const L = 0.5;
+    const pixels = renderPlanePixels(width, height, L, FINAL_SAMPLES);
 
-    // Column 1 of row 10: low chroma, mid lightness — comfortably in gamut.
-    const x = 1;
-    const y = 10;
-    const L = 1 - (y + 0.5) / height;
-    const c = ((x + 0.5) / width) * chromaAxisMax(hue);
-    const expected = oklchToSrgb(oklch(L, c, hue));
+    const x = 11;
+    const y = 6;
+    const point: PlanePoint = { h: ((x + 0.5) / width) * 360, t: 1 - (y + 0.5) / height };
+    const expected = oklchToSrgb(planePointToOklch(point, L));
     const i = (y * width + x) * 4;
 
     expect(pixels[i + 3]).toBe(255);
@@ -302,59 +337,51 @@ describe("renderPlanePixels", () => {
     expect(pixels[i + 2]).toBeCloseTo(Math.round(expected.b * 255), -0.4);
   });
 
-  it("marks the out-of-gamut region translucent so it reads as inert", () => {
-    const width = 40;
-    const height = 20;
-    const hue = 270;
-    const pixels = renderPlanePixels(width, height, hue, FINAL_SAMPLES);
-
-    let opaque = 0;
-    let inert = 0;
-    for (let y = 0; y < height; y += 1) {
-      const L = 1 - (y + 0.5) / height;
-      const boundary = (maxChroma(L, hue) / chromaAxisMax(hue)) * width;
-      for (let x = 0; x < width; x += 1) {
-        const alpha = pixels[(y * width + x) * 4 + 3] ?? 0;
-        if (alpha === 255) {
-          opaque += 1;
-          expect(x + 0.5).toBeLessThanOrEqual(boundary + 1);
-        } else {
-          inert += 1;
-          expect(x + 0.5).toBeGreaterThanOrEqual(boundary - 1);
-        }
-      }
-    }
-
-    // ADR 0005 measured ~50% of the rectangle out of gamut at any hue.
-    expect(opaque).toBeGreaterThan(0);
-    expect(inert).toBeGreaterThan(0);
+  it("leaves no inert pixel: every one is fully opaque", () => {
+    // ADR 0007: with chroma expressed as a fraction there is nothing to hatch.
+    const pixels = renderPlanePixels(40, 20, 0.5, FINAL_SAMPLES);
+    for (let i = 3; i < pixels.length; i += 4) expect(pixels[i]).toBe(255);
   });
 
-  it("hatches the inert region rather than flooding it", () => {
-    const pixels = renderPlanePixels(40, 20, 270, FINAL_SAMPLES);
-    const alphas = new Set<number>();
-    for (let i = 3; i < pixels.length; i += 4) {
-      const alpha = pixels[i] ?? 0;
-      if (alpha !== 255) alphas.add(alpha);
+  it("greys out along the bottom row and saturates towards the top", () => {
+    const width = 24;
+    const height = 24;
+    const pixels = renderPlanePixels(width, height, 0.6, FINAL_SAMPLES);
+    const spread = (x: number, y: number): number => {
+      const i = (y * width + x) * 4;
+      const channels = [pixels[i] ?? 0, pixels[i + 1] ?? 0, pixels[i + 2] ?? 0];
+      return Math.max(...channels) - Math.min(...channels);
+    };
+
+    // The lattice samples the bottom row at t ≈ 1/48 rather than exactly 0, so
+    // "grey" is a couple of code values wide, not identically neutral.
+    for (const x of [0, 6, 12, 18]) {
+      expect(spread(x, height - 1)).toBeLessThanOrEqual(5);
+      expect(spread(x, 0)).toBeGreaterThan(50);
     }
-    expect(alphas.size).toBe(2);
   });
 
   it("keeps the sample lattice inside its budget", () => {
-    // The draft pass exists so a hue drag stays interactive; if it ever sampled
-    // per-pixel the drag would run at ~15fps.
-    const wide = renderPlanePixels(400, 400, 270, DRAFT_SAMPLES);
+    // The draft pass exists so a lightness drag stays interactive; if it ever
+    // sampled per-pixel the drag would run at ~15fps.
+    const wide = renderPlanePixels(400, 400, 0.5, DRAFT_SAMPLES);
     expect(wide).toHaveLength(400 * 400 * 4);
   });
 });
 
-describe("hueTrackGradient", () => {
-  it("recolours the track from the current lightness and chroma", () => {
-    const dark = hueTrackGradient(oklch(0.25, 0.05, 0));
-    const light = hueTrackGradient(oklch(0.85, 0.05, 0));
-    expect(dark.startsWith("linear-gradient(to right, ")).toBe(true);
-    expect(dark.split("oklch(")).toHaveLength(14);
-    expect(dark).not.toBe(light);
+describe("lightnessTrackGradient", () => {
+  it("sweeps the current hue and chroma fraction from black to white", () => {
+    const track = lightnessTrackGradient(planePointToOklch({ h: 30, t: 0.9 }, 0.5));
+    expect(track.startsWith("linear-gradient(to right, ")).toBe(true);
+    expect(track.split("oklch(")).toHaveLength(14);
+    expect(track).toContain("oklch(0 0 30) 0.00%");
+    expect(track).toContain("oklch(1 0 30) 100.00%");
+  });
+
+  it("recolours with the hue the player is on", () => {
+    const warm = lightnessTrackGradient(planePointToOklch({ h: 30, t: 0.9 }, 0.5));
+    const cool = lightnessTrackGradient(planePointToOklch({ h: 240, t: 0.9 }, 0.5));
+    expect(warm).not.toBe(cool);
   });
 });
 
@@ -363,10 +390,10 @@ describe("hueTrackGradient", () => {
 /* -------------------------------------------------------------------------- */
 
 const PLANE_RECT: Rect = { left: 0, top: 0, width: 300, height: 200 };
-const HUE_RECT: Rect = { left: 0, top: 200, width: 300, height: 44 };
+const BAR_RECT: Rect = { left: 0, top: 200, width: 300, height: 44 };
 
 function measure(node: HTMLElement): Rect {
-  return node.classList.contains("picker-hue") ? HUE_RECT : PLANE_RECT;
+  return node.classList.contains("picker-lightness") ? BAR_RECT : PLANE_RECT;
 }
 
 type Surface = PlaneContext & { paints: number };
@@ -399,7 +426,7 @@ function picking(guess: Oklch): GameState {
 type Harness = {
   readonly slot: HTMLElement;
   readonly plane: HTMLElement;
-  readonly hue: HTMLElement;
+  readonly bar: HTMLElement;
   readonly cursor: HTMLElement;
   readonly loupe: HTMLElement;
   readonly surface: Surface;
@@ -423,7 +450,7 @@ function mount(): Harness {
   return {
     slot,
     plane: must(slot.querySelector<HTMLElement>(".picker-plane")),
-    hue: must(slot.querySelector<HTMLElement>(".picker-hue")),
+    bar: must(slot.querySelector<HTMLElement>(".picker-lightness")),
     cursor: must(slot.querySelector<HTMLElement>(".picker-cursor")),
     loupe: must(slot.querySelector<HTMLElement>(".picker-loupe")),
     surface,
@@ -457,10 +484,10 @@ function key(node: HTMLElement, name: string, shiftKey = false): void {
   );
 }
 
-/** Somewhere comfortably inside the in-gamut half of the plane. */
-const IN_GAMUT = { x: 30, y: 100 };
-/** Light and vivid at once — the inert region at every hue. */
-const OUT_OF_GAMUT = { x: 298, y: 6 };
+/** Mid-plane: a mid hue at a mid chroma fraction. */
+const MIDDLE = { x: 30, y: 100 };
+/** The most saturated corner — inert under ADR 0005, live now. */
+const TOP_RIGHT = { x: 298, y: 2 };
 /** Low in the plane, so the loupe has room to sit above the fingertip. */
 const LOW_CONTACT = { x: 30, y: 180 };
 
@@ -485,36 +512,38 @@ describe("createPicker", () => {
     expect(typeof factory).toBe("function");
   });
 
-  it("mounts a canvas plane, a cursor and a hue slider", () => {
-    const { slot, hue } = mount();
+  it("mounts a canvas plane, a cursor and a lightness bar", () => {
+    const { slot, bar } = mount();
     expect(slot.querySelector(".picker-plane-canvas")).not.toBeNull();
     expect(slot.querySelector(".picker-cursor")).not.toBeNull();
-    expect(hue.getAttribute("role")).toBe("slider");
-    expect(hue.getAttribute("aria-valuemax")).toBe("360");
+    expect(slot.querySelector(".picker-lightness-track")).not.toBeNull();
+    expect(bar.getAttribute("role")).toBe("slider");
+    expect(bar.getAttribute("aria-label")).toBe("Lightness");
+    expect(bar.getAttribute("aria-valuemax")).toBe("1");
   });
 
   it("is only focusable while picking", () => {
-    const { plane, hue, picker } = mount();
+    const { plane, bar, picker } = mount();
     picker.update(stateWith({ phase: "memorize", guess: START }));
     expect(plane.tabIndex).toBe(-1);
-    expect(hue.tabIndex).toBe(-1);
+    expect(bar.tabIndex).toBe(-1);
 
     picker.update(picking(START));
     expect(plane.tabIndex).toBe(0);
-    expect(hue.tabIndex).toBe(0);
+    expect(bar.tabIndex).toBe(0);
 
     picker.update(stateWith({ phase: "reveal", guess: START }));
     expect(plane.tabIndex).toBe(-1);
   });
 
   it("renders the guess through a custom property, not style.background", () => {
-    const { cursor, hue, picker } = mount();
-    const guess = oklch(0.6, 0.1, 120);
+    const { cursor, bar, picker } = mount();
+    const guess = planePointToOklch({ h: 120, t: 0.5 }, 0.6);
     picker.update(picking(guess));
 
     expect(cursor.style.getPropertyValue("--fill-color")).toBe(oklchToCss(guess));
-    expect(cursor.style.left).toBe(`${(planePointForColor(guess).u * 100).toFixed(3)}%`);
-    expect(hue.getAttribute("aria-valuenow")).toBe("120.0");
+    expect(cursor.style.left).toBe(`${((120 / 360) * 100).toFixed(3)}%`);
+    expect(bar.getAttribute("aria-valuenow")).toBe("0.600");
   });
 
   it("bails out of update when nothing it cares about changed", () => {
@@ -531,20 +560,20 @@ describe("createPicker", () => {
     expect(cursor.style.left).toBe(left);
   });
 
-  it("repaints the gradient on a hue change and never on a plane drag", () => {
-    const { plane, hue, surface, picker } = mount();
+  it("repaints on a lightness change and never on a plane drag", () => {
+    const { plane, bar, surface, picker } = mount();
     picker.update(picking(START));
     const afterMount = surface.paints;
     expect(afterMount).toBeGreaterThan(0);
 
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y);
     pointer(plane, "pointermove", 60, 80);
     pointer(plane, "pointermove", 90, 120);
     pointer(plane, "pointerup", 90, 120);
     expect(surface.paints).toBe(afterMount);
 
-    pointer(hue, "pointerdown", 150, 220);
-    pointer(hue, "pointermove", 160, 220);
+    pointer(bar, "pointerdown", 150, 220);
+    pointer(bar, "pointermove", 220, 220);
     expect(surface.paints).toBeGreaterThan(afterMount);
   });
 
@@ -552,7 +581,7 @@ describe("createPicker", () => {
     const { plane, picks, picker } = mount();
     picker.update(picking(START));
 
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y);
     expect(picks).toHaveLength(0);
 
     pointer(plane, "pointermove", 60, 60);
@@ -563,9 +592,8 @@ describe("createPicker", () => {
     if (committed === undefined) throw new Error("expected a commit");
 
     // Take-off: the value that counts is the one under the lift, not the land.
-    const expected = selectAtPlanePoint(planePointFromPointer(90, 150, PLANE_RECT), START.h);
-    expect(expected).not.toBeNull();
-    expect(oklchToCss(committed)).toBe(oklchToCss(expected ?? START));
+    const expected = planePointToOklch(planePointFromPointer(90, 150, PLANE_RECT), START.L);
+    expect(oklchToCss(committed)).toBe(oklchToCss(expected));
   });
 
   it("restores the value on pointercancel without committing", () => {
@@ -573,7 +601,7 @@ describe("createPicker", () => {
     picker.update(picking(START));
     const before = cursor.style.left;
 
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y);
     pointer(plane, "pointermove", 60, 60);
     const streamed = picks.length;
     pointer(plane, "pointercancel", 60, 60);
@@ -584,26 +612,45 @@ describe("createPicker", () => {
     expect(cursor.style.left).toBe(before);
   });
 
-  it("is inert over the out-of-gamut region", () => {
+  it("selects everywhere in the plane, including the saturated corner", () => {
     const { plane, picks, picker, cursor } = mount();
     picker.update(picking(START));
 
-    pointer(plane, "pointerdown", OUT_OF_GAMUT.x, OUT_OF_GAMUT.y);
-    const parked = cursor.style.left;
-    pointer(plane, "pointermove", OUT_OF_GAMUT.x, OUT_OF_GAMUT.y);
-    expect(picks).toHaveLength(0);
-    expect(cursor.style.left).toBe(parked);
-
-    // Dragging back into the live half picks up again.
-    pointer(plane, "pointermove", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", TOP_RIGHT.x, TOP_RIGHT.y);
+    pointer(plane, "pointermove", TOP_RIGHT.x, TOP_RIGHT.y);
     expect(picks).toHaveLength(1);
+    expect(cursor.style.top).toBe(`${((TOP_RIGHT.y / PLANE_RECT.height) * 100).toFixed(3)}%`);
+
+    const picked = picks[0];
+    if (picked === undefined) throw new Error("expected a pick");
+    expect(isInGamut(picked)).toBe(true);
+  });
+
+  it("carries the chroma fraction through a lightness drag", () => {
+    const { plane, bar, picks, picker } = mount();
+    picker.update(picking(START));
+
+    pointer(plane, "pointerdown", 200, 40);
+    pointer(plane, "pointerup", 200, 40);
+    const inPlane = picks[picks.length - 1];
+    if (inPlane === undefined) throw new Error("expected a pick");
+
+    pointer(bar, "pointerdown", 240, 220);
+    pointer(bar, "pointerup", 240, 220);
+    const brighter = picks[picks.length - 1];
+    if (brighter === undefined) throw new Error("expected a pick");
+
+    expect(brighter.L).toBeCloseTo(0.8, 10);
+    expect(brighter.h).toBeCloseTo(inPlane.h, 10);
+    expect(planePointForColor(brighter).t).toBeCloseTo(planePointForColor(inPlane).t, 8);
+    expect(isInGamut(brighter)).toBe(true);
   });
 
   it("ignores a drag that starts before picking", () => {
     const { plane, picks, picker } = mount();
     picker.update(stateWith({ phase: "memorize", guess: START }));
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y);
-    pointer(plane, "pointerup", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y);
+    pointer(plane, "pointerup", MIDDLE.x, MIDDLE.y);
     expect(picks).toHaveLength(0);
   });
 
@@ -611,9 +658,9 @@ describe("createPicker", () => {
     const { plane, loupe, picker } = mount();
     picker.update(picking(START));
 
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y, "mouse");
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y, "mouse");
     expect(loupe.hidden).toBe(true);
-    pointer(plane, "pointerup", IN_GAMUT.x, IN_GAMUT.y, "mouse");
+    pointer(plane, "pointerup", MIDDLE.x, MIDDLE.y, "mouse");
 
     pointer(plane, "pointerdown", LOW_CONTACT.x, LOW_CONTACT.y, "touch");
     expect(loupe.hidden).toBe(false);
@@ -629,7 +676,7 @@ describe("createPicker", () => {
     const { plane, cursor, picker } = mount();
     picker.update(picking(START));
 
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y);
     pointer(plane, "pointermove", 120, 60);
     const dragged = cursor.style.left;
 
@@ -640,18 +687,18 @@ describe("createPicker", () => {
   });
 
   it("nudges with the arrow keys and takes shift as the coarse modifier", () => {
-    const { plane, hue, picks, picker } = mount();
-    const guess = oklch(0.5, 0.05, 270);
+    const { plane, bar, picks, picker } = mount();
+    const guess = planePointToOklch({ h: 270, t: 0.5 }, 0.5);
     picker.update(picking(guess));
 
     key(plane, "ArrowRight");
-    key(hue, "ArrowRight", true);
+    key(bar, "ArrowRight", true);
 
     expect(picks).toHaveLength(2);
     const [fine, coarse] = picks;
     if (fine === undefined || coarse === undefined) throw new Error("expected two picks");
-    expect(fine.c).toBeGreaterThan(guess.c);
-    expect(coarse.h).toBeCloseTo(270 + HUE_NUDGE_DEG * COARSE_MULTIPLIER, 6);
+    expect(fine.h).toBeCloseTo(270 + HUE_NUDGE_DEG, 6);
+    expect(coarse.L).toBeCloseTo(0.5 + LIGHTNESS_NUDGE * COARSE_MULTIPLIER, 6);
   });
 
   it("leaves keys it does not own to the page", () => {
@@ -678,8 +725,8 @@ describe("createPicker", () => {
     picker.destroy();
 
     expect(slot.querySelector(".picker")).toBeNull();
-    pointer(plane, "pointerdown", IN_GAMUT.x, IN_GAMUT.y);
-    pointer(plane, "pointerup", IN_GAMUT.x, IN_GAMUT.y);
+    pointer(plane, "pointerdown", MIDDLE.x, MIDDLE.y);
+    pointer(plane, "pointerup", MIDDLE.x, MIDDLE.y);
     key(plane, "ArrowRight");
     expect(picks).toHaveLength(0);
   });

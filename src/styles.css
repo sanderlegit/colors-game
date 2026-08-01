@@ -232,6 +232,11 @@ p {
       "result result";
     justify-items: stretch;
     align-items: center;
+    /* Centre the two column tracks rather than letting them spread to the
+       viewport edges — on a wide monitor that left a dead gap between the
+       picker and the preview it is meant to be read against. */
+    justify-content: center;
+    column-gap: var(--space-5);
   }
 
   .game-side {
@@ -331,7 +336,6 @@ p {
 }
 
 .swatch-fill,
-.swatch-mask,
 .swatch-picker-slot {
   grid-area: cell;
   border-radius: inherit;
@@ -340,13 +344,6 @@ p {
 
 .swatch-fill {
   background: var(--fill-color, transparent);
-}
-
-/* ADR 0006: the neutral the dissolve passes through. Deliberately the same mid
-   grey the picker starts on (SPEC §5.3, chroma 0), so the handover between the
-   mask and the picker has no visible seam. */
-.swatch-mask {
-  background: oklch(0.5 0 0);
 }
 
 /* The only element in the swatch that owns a gesture, so the only one that may
@@ -548,7 +545,6 @@ p {
    is disabled repo-wide for exactly this block. */
 @media (prefers-reduced-motion: reduce) {
   .swatch-fill,
-  .swatch-mask,
   .swatch-picker-slot,
   .preview,
   .hud-confirm,
@@ -562,7 +558,7 @@ p {
   }
 }
 
-/* --- Picker (ADR 0005) ---------------------------------------------------- */
+/* --- Picker (ADR 0007) ---------------------------------------------------- */
 
 /* Mount contract with src/ui/swatch.ts: the slot has no size of its own and its
    `opacity` / `pointer-events` belong to the dissolve. Everything here is a
@@ -570,8 +566,8 @@ p {
    (SPEC §9.4 asserts they match within 1px). */
 .picker {
   display: grid;
-  /* ADR 0005: the slider is inlaid, not placed outside — the footprint match is
-     the game mechanic. 268 of 300px on the L axis costs 0.18 → 0.20 ΔE00/px. */
+  /* The bar is inlaid, not placed outside — the footprint match is the game
+     mechanic. It costs the plane 268 of 300px on the chroma-fraction axis. */
   grid-template-rows: minmax(0, 1fr) max(32px, var(--tap-target));
   width: 100%;
   height: 100%;
@@ -584,7 +580,7 @@ p {
 /* The two elements in the swatch that own a gesture, so the only ones that may
    take `touch-action` away from the page. */
 .picker-plane,
-.picker-hue {
+.picker-lightness {
   touch-action: none;
 }
 
@@ -596,7 +592,7 @@ p {
 
 /* The outline would be clipped by `.picker`'s overflow, so it is drawn inward. */
 .picker-plane:focus-visible,
-.picker-hue:focus-visible {
+.picker-lightness:focus-visible {
   outline: 3px solid var(--color-accent);
   outline-offset: -3px;
 }
@@ -608,7 +604,7 @@ p {
 }
 
 /* A separate positioned element, never part of the gradient: dragging moves this
-   and repaints nothing (ADR 0005). */
+   and repaints nothing (ADR 0007). */
 .picker-cursor {
   position: absolute;
   top: 50%;
@@ -652,24 +648,25 @@ p {
   height: 100%;
 }
 
-/* ADR 0005: hue is the precision bottleneck (~0.93 ΔE00/px against 0.18 in the
-   plane), so it gets the full width and a tap-target-tall band. */
-.picker-hue {
+/* ADR 0007: lightness is the least sensitive of the three axes (~0.37 ΔE00/px
+   here), which is why it is the one that gets relegated to a band. Full width
+   and tap-target tall all the same. */
+.picker-lightness {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.picker-hue-track {
+.picker-lightness-track {
   width: 100%;
   height: 32px;
-  /* Recoloured live to the current L and C; the fallback only shows before the
-     first update. */
-  background: var(--hue-track, linear-gradient(to right, #808080, #808080));
+  /* Recoloured live to the current hue and chroma fraction; the fallback only
+     shows before the first update. */
+  background: var(--lightness-track, linear-gradient(to right, #000000, #ffffff));
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 20%);
 }
 
-.picker-hue-thumb {
+.picker-lightness-thumb {
   position: absolute;
   top: 50%;
   left: 0;

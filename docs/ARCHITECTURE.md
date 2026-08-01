@@ -55,7 +55,7 @@ src/
     *.test.ts
   ui/
     swatch.ts         the shared rect: color fill layer + picker layer + dissolve
-    picker.ts         2D plane (canvas) + hue slider, pointer/keyboard input
+    picker.ts         hue x chroma plane (canvas) + lightness bar (ADR 0007)
     preview.ts        live guess panel + numeric readout
     hud.ts            countdown, round counter, confirm button
     reveal.ts         target vs guess, ΔE, score
@@ -175,15 +175,16 @@ Transition: opacity crossfade over 450ms with `pointer-events` handed to the
 picker only after the fade completes (prevents a stray tap landing mid-dissolve).
 Under `prefers-reduced-motion: reduce` the duration collapses to 0.
 
-The picker plane is a `<canvas>` painted once per hue change (not per frame) at
-device pixel ratio; the cursor is a separate absolutely-positioned DOM element so
-dragging never repaints the gradient.
+The picker plane is a `<canvas>` painted once per **lightness** change (not per
+frame) at device pixel ratio — hue and chroma are the plane's own axes since
+ADR 0007, so a drag within the plane repaints nothing. The cursor is a separate
+absolutely-positioned DOM element.
 
 ## Touch
 
 - `pointerdown/move/up` with `setPointerCapture` — one code path for mouse, touch,
   and pen. No separate touch handlers.
-- `touch-action: none` on the picker plane and hue slider only, so the page still
+- `touch-action: none` on the picker plane and lightness bar only, so the page still
   scrolls everywhere else.
 - **Finger occlusion:** the fingertip covers the pixel being selected. Mitigation
   is a loupe — a circular magnified preview offset above the contact point, shown

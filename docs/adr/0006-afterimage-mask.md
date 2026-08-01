@@ -1,7 +1,11 @@
 # 0006 — Fade through a neutral mask, not directly into the picker
 
-Date: 2026-08-01 · Status: accepted
+Date: 2026-08-01 · Status: **superseded by [ADR 0008](0008-dissolve-straight-into-the-picker.md)**
 Research: `docs/research/color-science.md`
+
+> Superseded on feel: the grey hold reads as a hitch at the moment the
+> interaction most needs to feel continuous. The perceptual argument below is
+> not refuted — it is outweighed, and ADR 0008 records what we are accepting.
 
 ## Context
 

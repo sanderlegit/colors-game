@@ -23,9 +23,12 @@ import { createPicker } from "@/ui/picker";
 import { createGameView } from "@/ui/render";
 
 /**
- * The readout's hex value. Chroma is reduced into gamut first: a guess can sit in
- * the out-of-gamut region of the picker plane, and clamping RGB channels instead
- * would shift the hue by as much as 69° (ADR 0005).
+ * The readout's hex value.
+ *
+ * Since ADR 0007 the picker's whole plane is in gamut, so the clip is a no-op for
+ * anything the player can actually select. It stays because this takes an
+ * arbitrary `Oklch` and the alternative failure mode is silent: clamping RGB
+ * channels instead of reducing chroma shifts the hue by as much as 69°.
  */
 function formatHex(color: Oklch): string {
   return toHex(oklchToSrgb(clipChromaToGamut(color)));
