@@ -63,6 +63,10 @@ test("the target color is not in the DOM once picking starts", async ({ page }) 
   if (await revealChip.count()) {
     expect((await revealChip.getAttribute("style")) ?? "").not.toContain("oklch");
   }
+
+  // Nor the reveal reticle (ADR 0009): it only carries the target during reveal.
+  const reticleStyle = await page.locator(".picker-target").getAttribute("style");
+  expect(reticleStyle ?? "").not.toContain("oklch");
 });
 
 test("the picker is inert during the dissolve", async ({ page }) => {
@@ -106,7 +110,7 @@ test("the confirm button is unavailable until the picker has been moved", async 
   await expect(page.locator(".hud-confirm")).toBeDisabled();
 });
 
-test("the reveal does not move the board underneath it", async ({ page }) => {
+test("the reveal keeps the annotated picker in place (ADR 0009)", async ({ page }) => {
   await playToPicking(page);
   const before = await box(page.locator(".swatch-stack"));
 
@@ -118,15 +122,30 @@ test("the reveal does not move the board underneath it", async ({ page }) => {
   await page.locator(".hud-confirm").click();
   await expect(page.locator(".reveal")).toBeVisible();
 
-  // The reveal is an overlay precisely so this holds: reserving its ~300px in
-  // the grid does not fit on a 664px phone alongside the swatch.
+  // The card is an overlay precisely so this holds: reserving its height in the
+  // grid does not fit on a 664px phone alongside the swatch (history/0001).
   expectSameRect(await box(page.locator(".swatch-stack")), before, "stage across reveal");
 
+  // The picker is still on screen and the target reticle is drawn on it, within
+  // the plane's box — this is the whole point of leaving the board up (ADR 0009).
+  await expect(page.locator(".picker-plane")).toBeVisible();
+  const reticle = page.locator(".picker-target");
+  await expect(reticle).toBeVisible();
+  const marker = await box(reticle);
+  const planeNow = await box(page.locator(".picker-plane"));
+  const cx = marker.x + marker.width / 2;
+  const cy = marker.y + marker.height / 2;
+  expect(cx, "reticle x within plane").toBeGreaterThanOrEqual(planeNow.x - 1);
+  expect(cx, "reticle x within plane").toBeLessThanOrEqual(planeNow.x + planeNow.width + 1);
+  expect(cy, "reticle y within plane").toBeGreaterThanOrEqual(planeNow.y - 1);
+  expect(cy, "reticle y within plane").toBeLessThanOrEqual(planeNow.y + planeNow.height + 1);
+
+  // The result card itself is within the viewport.
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error("no viewport");
-  const reveal = await box(page.locator(".reveal"));
-  expect(reveal.y).toBeGreaterThanOrEqual(-1);
-  expect(reveal.y + reveal.height).toBeLessThanOrEqual(viewport.height + 1);
+  const card = await box(page.locator(".reveal-card"));
+  expect(card.y).toBeGreaterThanOrEqual(-1);
+  expect(card.y + card.height).toBeLessThanOrEqual(viewport.height + 1);
 });
 
 test("a full round: memorize, pick, confirm, score", async ({ page }) => {
