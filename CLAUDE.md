@@ -16,6 +16,7 @@ Before you start, in order of how often it saves you:
 | Touching `src/color/**` | `docs/research/color-science.md`. Constants and test vectors are cited there — **never re-derive them from memory or fetch alternatives**. |
 | Hit a baffling tooling or test failure | `docs/history/README.md` § Environment traps. happy-dom dropping `oklch()`, TS 7 removing `baseUrl`, and swallowed `console.log` are all in there. |
 | Wondering why the code is shaped this way | `docs/adr/README.md`, then `docs/history/`. |
+| Tuning a number (score curve, difficulty, timings) | `docs/TUNING.md`. Two different things are called "difficulty"; that page disambiguates. |
 | Looking for work | `docs/BACKLOG.md` § Known gaps. |
 
 Two decisions have already been reversed after playtesting (ADR 0005→0007,
@@ -63,6 +64,13 @@ If you think you need an exception, you need an ADR instead.
 ## Tests
 
 - Test files sit next to their subject: `src/color/deltaE.test.ts`.
+- **happy-dom silently drops `oklch()` from `background`/`background-color`**, so
+  asserting on a rendered colour string compares against `""`. All colour goes
+  through the `--fill-color` custom property (`setFillColor` in `src/ui/swatch.ts`);
+  assert on that. happy-dom also has no layout and no canvas — geometry belongs in
+  `e2e/`. More in `docs/history/README.md` § Environment traps.
+- No optional chaining on the thing under test: `root.querySelector(".x")?.click()`
+  silently passes when the selector is wrong. Use a `must()` helper that throws.
 - Test **behavior and invariants**, not implementation details. No snapshot tests
   of markup.
 - Every bug fix starts with a failing test that reproduces it.

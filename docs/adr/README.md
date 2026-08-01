@@ -32,7 +32,7 @@ argument that engages with the reason it was rejected.
 | CIE94 for scoring | Asymmetric: ΔE(a,b) ≠ ΔE(b,a). Neither colour is a "reference" in a game | 0004 |
 | CAM16-UCS | Needs viewing-condition parameters a web page cannot know | 0004 |
 | OKLab ΔE as a cheaper ΔE00 | No single scaling constant — the ratio swings 2.7× across the gamut | 0004 |
-| OKHSV / OKHSL picker | Measurably *worse* than HSV (dead-axis area 24%→26%→29%). The problem is topological, not colorimetric | 0005 |
+| OKHSV / OKHSL picker | Does not fix what it looks like it fixes: dead-axis area gets *worse* (HSV 24% → OKHSV 26% → OKHSL 29%), because the problem is topological, not colorimetric. (On the other measured column, unfairness ratio, OKHSL does beat HSV 3.5× vs 4.0× — the rejection rests on dead-axis area and, decisively, on 0007's searchability argument.) | 0005 → 0007 |
 | L×C plane at constant hue | Flattest fairness, but the player cannot *find* the colour — hue is invisible | 0005 → 0007 |
 | Neutral mask in the dissolve | Perceptually justified, but reads as a hitch at the moment that must feel continuous | 0006 → 0008 |
 | Clamping RGB channels to fix out-of-gamut | Shifts hue by up to 69°. Reduce chroma at constant L and h instead | 0004, `src/color/gamut.ts` |

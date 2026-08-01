@@ -69,7 +69,7 @@ memorized-rect-vs-picker (does not, and needs the test).
 - **Repaint budget missed** (3.5). The floor is the per-pixel buffer fill, not the
   colour sampling; getting under 4ms would need a gamma LUT plus lattice
   interpolation. Measure on real hardware before optimising — 11ms only occurs on
-  hue change, never during a plane drag.
+  **lightness** change (ADR 0007), never during a plane drag.
 - **Difficulty tiers are unreachable.** `generateTarget` accepts a `Difficulty`,
   but `createReducer` calls `deps.target(seed, roundIndex)`, so every game plays
   `normal`. Wiring it needs a field on `Settings` and a control in the menu.

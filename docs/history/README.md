@@ -14,6 +14,18 @@ turned out to be wrong, say so in the newer entry.
 |---|---------|---------------------|
 | [0001](0001-initial-build.md) | 2026-08-01 — initial build | Whole game from empty directory. Two design reversals after playtest, three layout bugs only visible at phone viewport. |
 
+## Auditing the docs
+
+When the documentation set changes shape, hand a **fresh agent with no session
+context** four or five questions whose answers live in different corners, and tell
+it to record every file it opens and to be blunt about what broke. Session 0001
+did this and it found a superseded research section that would have led an agent
+to rebuild two reverted designs.
+
+Two rules: route it through the real entry point (`CLAUDE.md` → `docs/README.md`)
+rather than pointing it at answers, and **re-verify every finding against the
+files before acting** — that audit included one confident claim that was false.
+
 ## Environment traps
 
 Discovered the hard way. Each one cost real time; none is guessable from the code.

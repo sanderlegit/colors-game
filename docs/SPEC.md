@@ -151,8 +151,11 @@ someone with total color blindness. What we *will* do:
 
 - **Numeric readout** of the current pick (hex + coordinates), always visible, so
   the picker is operable and verifiable without relying solely on the rendered color.
-- **Full keyboard control**: the picker plane and lightness bar are focusable, arrow
-  keys nudge by 1 unit, shift+arrow by 10, Enter confirms. Visible focus rings.
+- **Full keyboard control**: the picker plane and lightness bar are focusable and
+  Enter confirms. Visible focus rings. Arrow keys nudge; **shift makes the step
+  coarser, never finer** (`COARSE_MULTIPLIER` = 10). Actual steps are per-axis and
+  live in `src/ui/picker.ts` — see `docs/TUNING.md` rather than restating them here,
+  because a spec that duplicates constants is a spec that goes stale.
 - **`prefers-reduced-motion: reduce`** → the 450ms dissolve becomes an instant
   swap and the countdown ring stops animating (the numeric countdown remains).
   The 5s memorize window is unchanged; it is a game rule, not decoration.
@@ -201,9 +204,14 @@ small follow-up, deliberately).
 
 ## 11. Definition of done for v1
 
-- [ ] `npm run verify` green (typecheck, lint, unit, build)
-- [ ] `npm run e2e` green on Desktop Chrome and iPhone 14 projects
-- [ ] Coverage ≥ 90% on `src/color/**` and `src/domain/**`
-- [ ] CIEDE2000 implementation passes the published test vectors
+- [x] `npm run verify` green (typecheck, lint, unit, build)
+- [x] `npm run e2e` green on Desktop Chrome and iPhone 14 projects
+- [x] Coverage ≥ 90% on `src/color/**` and `src/domain/**` — actually 100%
+- [x] CIEDE2000 implementation passes the published test vectors — all 34 Sharma pairs
 - [ ] Playable end-to-end on a real iPhone over the LAN dev server
 - [ ] Every §8 accessibility item verified manually once, keyboard-only
+
+**This section describes the target, not the shipped state.** Parts of §5.1
+(difficulty tiers) and §8 (the memorize-duration setting) are implemented in the
+domain but not reachable from the UI. `docs/BACKLOG.md` § Known gaps is the
+authority on what actually works today; when the two disagree, BACKLOG is right.

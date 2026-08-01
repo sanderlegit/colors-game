@@ -104,6 +104,40 @@ recoverable six months later.
   At C=0 the hue is invisible, so it leaks nothing. (SPEC §5.3)
 - **The afterimage mask was added, then removed.** See above.
 
+## The documentation was audited cold, and it failed in four places
+
+After writing the docs, a **fresh agent with no session context** was asked five
+questions that each required navigating to a different corner, and told to record
+every file it opened and to be harsh. This is cheap and worth repeating whenever
+the doc set changes shape.
+
+Four of five questions were answered on the second file opened. The failures were
+the useful part:
+
+1. **`research/color-science.md` § Picker UX was superseded but unmarked** — and
+   the routing table sent every `src/color/**` task straight into it. It still
+   prescribed the ADR 0005 picker *and* the ADR 0006 mask, both reverted. Worse,
+   its picker ranking opens with "OKHSL — best", so an agent entering through
+   research rather than the ADR log would have confidently recommended the one
+   thing the decision log lists as pre-rejected. **Both sections now carry
+   superseded banners.** Append-only means adding a banner, not editing the body.
+2. **No route to "I want to tune the score curve."** The answer was split across
+   three documents with nothing linking them, and no document named the constants,
+   so the only path to `SCORE_SCALE` was grepping source. `TUNING.md` now exists.
+3. **The happy-dom `oklch()` trap was filed under "hitting a weird failure"** —
+   i.e. discoverable only after it had already cost an hour. It is prevention
+   material, so it moved into `CLAUDE.md` § Tests, which every agent loads.
+4. **Two stale sentences survived in the conclusions readers act on**:
+   ARCHITECTURE's performance budget and BACKLOG's known gaps both still said the
+   canvas repaints on *hue* change, while passing prose elsewhere in the same
+   files correctly said lightness. Anyone profiling would have instrumented the
+   wrong event.
+
+Also worth knowing: **the audit reported one finding that was simply wrong** — it
+claimed `CLAUDE.md` still named `tests/purity.test.ts`, which had already been
+fixed. Every finding was re-verified against the files before acting; a confident
+audit is still just a claim.
+
 ## What was not done
 
 Tracked in `../BACKLOG.md` § Known gaps. In short: no real-device pass, no

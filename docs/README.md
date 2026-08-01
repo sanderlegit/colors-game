@@ -10,8 +10,10 @@ document in one hop instead of grepping.
 | New to the repo | `../CLAUDE.md` → `SPEC.md` → `ARCHITECTURE.md` |
 | Changing game rules, phases, scoring, or layout | `SPEC.md` (it is the product contract) |
 | Adding or moving a module | `ARCHITECTURE.md` § Directory layout + § Core contracts |
-| Touching anything in `src/color/**` | `research/color-science.md`, then `research/test-vectors.md`. **Do not re-derive constants from memory.** |
-| Touching scoring | `adr/0004-perceptual-scoring.md` |
+| Touching anything in `src/color/**` | `research/color-science.md`, then `research/test-vectors.md`. **Do not re-derive constants from memory.** Its § Picker UX is superseded and banner-marked — check `adr/README.md` before building anything from that section. |
+| Touching scoring | `adr/0004-perceptual-scoring.md`, then `TUNING.md` |
+| **Tuning anything** — score curve, difficulty, timings, picker feel | `TUNING.md`. It names the constants so you don't have to grep. Note "difficulty" means two different things; that page disambiguates. |
+| **About to write a test** | `history/README.md` § Environment traps → Testing. **Read it first, not after it bites** — happy-dom silently drops `oklch()`, has no layout and no canvas, and swallows `console.log`. |
 | Touching the picker | `adr/0007-picker-shows-every-hue.md` (and `adr/0005` for what was rejected) |
 | Touching the dissolve | `adr/0008-dissolve-straight-into-the-picker.md` (and `adr/0006`) |
 | About to propose an idea | `adr/README.md` § Already rejected — check it isn't there |
@@ -31,6 +33,7 @@ document in one hop instead of grepping.
 | `adr/` | Decisions and their consequences. | **No — immutable. Supersede instead.** |
 | `research/` | Cited color science with VERIFIED / UNVERIFIED marked. | Append-only |
 | `history/` | What actually happened, session by session. | Append-only |
+| `TUNING.md` | Every knob, what it does, where it lives. | Yes |
 | `player-guide.md` | Player-facing explanation of scoring. | Yes |
 
 ## The two rules that matter most

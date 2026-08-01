@@ -651,6 +651,22 @@ gamut surfaces"* — a plain chroma search overshoots and desaturates too much.
 
 ## Picker UX
 
+> **⚠ SUPERSEDED — do not build from this section.**
+> Everything below prescribes the ADR 0005 picker: an OKLCh L×C plane at constant
+> hue, an inlaid hue slider, and an inert out-of-gamut region. That design was
+> built, played, and **reversed in [ADR 0007](../adr/0007-picker-shows-every-hue.md)**
+> because a single-hue plane is unsearchable — the player cannot find the colour
+> they memorised. The current picker puts hue × chroma in the plane and lightness
+> on a bar, and has no out-of-gamut region at all.
+>
+> Note especially that the ranking below concludes **"OKHSL — best"**. That answers
+> "which cylinder is least bad", not "which picker should we ship"; the fairness
+> rebuttal is a later subsection, and ADR 0007 supersedes both.
+>
+> Still valid here: the precision budget, finger-occlusion mitigations (take-off
+> selection, the loupe) and minimum touch-target sizes. Those are properties of
+> touch input, not of the axis layout, and the current picker keeps them.
+
 *(Item 6. Guideline and HCI claims are cited; the precision figures in the
 "Fairness" and "Precision" subsections were computed for this document.)*
 
@@ -834,6 +850,12 @@ perceptual scale at the target.
 **Do not ship:** three RGB sliders, or plain HSV.
 
 ### One perceptual caution not in the brief
+
+> **⚠ SUPERSEDED as a recommendation.** The afterimage effect described below is
+> real and was implemented as a neutral mask
+> ([ADR 0006](../adr/0006-afterimage-mask.md)), then **removed on feel in
+> [ADR 0008](../adr/0008-dissolve-straight-into-the-picker.md)**. The bias is
+> knowingly unmitigated. Read this for the mechanism, not as a thing to build.
 
 A 5 s fixation on a saturated swatch produces a **negative afterimage**, and this
 design places the picker at the *exact retinal location* the swatch just

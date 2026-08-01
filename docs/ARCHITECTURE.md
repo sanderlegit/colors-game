@@ -204,7 +204,9 @@ absolutely-positioned DOM element.
 ## Performance budget
 
 - Bundle ≤ 30 KB gzipped, zero runtime dependencies.
-- Gradient repaint ≤ 4ms at 2× DPR on a mid-range phone; repaint only on hue change.
+- Plane repaint ≤ 4ms at 2× DPR on a mid-range phone; repaint only on **lightness**
+  change (ADR 0007 — hue and chroma are the plane's own axes). **Currently missed:
+  ~11ms final / 6.7ms draft. See `BACKLOG.md`.**
 - No layout thrash in the frame loop: components read state, write style — never
   read layout during `update`.
 
