@@ -16,7 +16,6 @@ import type { Oklch } from "@/color/types";
 import type { Event, GameState } from "@/domain/state";
 import { createHud } from "@/ui/hud";
 import { createMenu } from "@/ui/menu";
-import { createPreview } from "@/ui/preview";
 import { createReveal } from "@/ui/reveal";
 import { createSwatch } from "@/ui/swatch";
 
@@ -63,7 +62,6 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   const hudRegion = region(game, "game-hud");
   const stageRegion = region(game, "game-stage");
   const sideRegion = region(game, "game-side");
-  const resultRegion = region(game, "game-result");
   const menuRegion = region(game, "game-menu");
 
   root.append(game);
@@ -80,14 +78,12 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
     onPick: (value) => deps.dispatch({ type: "PICK", value }),
   });
 
+  // The side panel is the live guess during picking and the round result after
+  // confirm — one persistent place, nothing shifting (ADR 0010).
   // `exactOptionalPropertyTypes` is on, so an absent formatter must be omitted
   // rather than passed as undefined.
-  const preview = createPreview(
-    sideRegion,
-    deps.formatHex === undefined ? {} : { formatHex: deps.formatHex },
-  );
   const reveal = createReveal(
-    resultRegion,
+    sideRegion,
     { onNext: () => deps.dispatch({ type: "NEXT" }) },
     deps.formatHex === undefined ? {} : { formatHex: deps.formatHex },
   );
@@ -114,7 +110,7 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
     deps.bestScore === undefined ? {} : { bestScore: deps.bestScore },
   );
 
-  const parts = [hud, swatch, picker, preview, reveal, menu];
+  const parts = [hud, swatch, picker, reveal, menu];
 
   function update(state: GameState): void {
     now = state.now;

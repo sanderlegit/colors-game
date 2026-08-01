@@ -34,6 +34,10 @@ function fillColor(root: HTMLElement, selector: string): string {
 const TARGET = oklch(0.6, 0.15, 210);
 const GUESS = oklch(0.55, 0.11, 195);
 
+function picking(): GameState {
+  return stateWith({ phase: "picking", target: TARGET, guess: GUESS });
+}
+
 /** Takes bare scores and attaches the colors, so cases read as score data. */
 function revealed(scores: readonly Score[], roundIndex = 0): GameState {
   const results: readonly RoundResult[] = scores.map((s) => ({
@@ -45,26 +49,51 @@ function revealed(scores: readonly Score[], roundIndex = 0): GameState {
 }
 
 describe("createReveal", () => {
-  it("stays out of the way outside the reveal phase", () => {
+  it("shows the live guess during picking, with the target still hidden", () => {
     const root = mount();
     const reveal = createReveal(root, { onNext: () => {} });
-    reveal.update(stateWith({ phase: "picking", target: TARGET, guess: GUESS }));
+    reveal.update(picking());
 
-    expect(must(root.querySelector<HTMLElement>(".reveal")).hidden).toBe(true);
-    // The target must not leak while the player is still guessing.
-    expect(fillColor(root, ".reveal-chip")).toBe("");
+    const section = must(root.querySelector<HTMLElement>(".reveal"));
+    // The panel is always present now — never `hidden` — but not yet revealed.
+    expect(section.hidden).toBe(false);
+    expect(section.classList.contains("is-revealed")).toBe(false);
+
+    // The guess is not secret: it renders live. The target must not.
+    expect(fillColor(root, ".reveal-chip")).toBe(oklchToCss(GUESS));
+    expect(fillColor(root, ".reveal-chip--target")).toBe("");
+
+    const you = [...root.querySelectorAll<HTMLElement>(".reveal-compare-you")].map(
+      (n) => n.textContent,
+    );
+    const target = [...root.querySelectorAll<HTMLElement>(".reveal-compare-target")].map(
+      (n) => n.textContent,
+    );
+    expect(you).toEqual(["—", "0.550", "0.110", "195.0°"]);
+    // SPEC §9.4: nothing about the target is in the DOM while the player guesses.
+    expect(target).toEqual(["—", "—", "—", "—"]);
   });
 
-  it("shows target and guess side by side", () => {
+  it("reads as waiting during memorize — no guess yet", () => {
+    const root = mount();
+    const reveal = createReveal(root, { onNext: () => {} });
+    reveal.update(stateWith({ phase: "memorize", target: TARGET, guess: GUESS }));
+
+    const section = must(root.querySelector<HTMLElement>(".reveal"));
+    expect(section.classList.contains("is-dim")).toBe(true);
+    expect(fillColor(root, ".reveal-chip")).toBe("");
+    expect(text(root, ".reveal-compare-you")).toBe("—");
+  });
+
+  it("reveals the target and marks the panel revealed on confirm", () => {
     const root = mount();
     const reveal = createReveal(root, { onNext: () => {} });
     reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
 
-    const chips = [...root.querySelectorAll<HTMLElement>(".reveal-chip")];
-    expect(chips.length).toBe(2);
-    expect(chips[0]?.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchToCss(TARGET));
-    expect(chips[1]?.style.getPropertyValue(FILL_COLOR_PROPERTY)).toBe(oklchToCss(GUESS));
-    expect(must(root.querySelector<HTMLElement>(".reveal")).hidden).toBe(false);
+    const section = must(root.querySelector<HTMLElement>(".reveal"));
+    expect(section.classList.contains("is-revealed")).toBe(true);
+    expect(fillColor(root, ".reveal-chip")).toBe(oklchToCss(GUESS));
+    expect(fillColor(root, ".reveal-chip--target")).toBe(oklchToCss(TARGET));
   });
 
   it("shows your coordinates against the target's", () => {
@@ -78,7 +107,6 @@ describe("createReveal", () => {
     const target = [...root.querySelectorAll<HTMLElement>(".reveal-compare-target")].map(
       (n) => n.textContent,
     );
-
     // Rows are hex, L, C, h. Hex is "—" here because no formatter was injected.
     expect(you).toEqual(["—", "0.550", "0.110", "195.0°"]);
     expect(target).toEqual(["—", "0.600", "0.150", "210.0°"]);

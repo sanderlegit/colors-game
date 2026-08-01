@@ -1,18 +1,22 @@
 /**
- * The reveal screen (SPEC §3, §6): the round result, read against the picker the
- * player was just using. The picker stays in place and gains a target reticle
- * (ADR 0009); this panel is the compact card beside it — the colours side by
- * side, the raw ΔE, the score, and your-vs-target coordinates so the error is
- * legible as numbers, not colour alone (SPEC §8).
+ * The side panel (SPEC §4, §8, ADR 0010): one fixed place for everything about
+ * the current pick, so nothing on screen moves between guessing and scoring.
  *
- * The raw ΔE is deliberately visible. Showing the number the score was computed
- * from is what makes the scoring auditable; hiding it invites the accusation
- * that the curve is rigged, and that accusation is unanswerable once the input
- * is secret.
+ * During `picking` it is the live guess readout — the "You" column and the guess
+ * swatch update every frame, exactly what the preview used to do. On `CONFIRM`
+ * the target swatch, the ΔE / score / total and the "Target" column become
+ * visible in slots that were **already reserved**, so the reveal shifts nothing
+ * (ADR 0010, superseding the floating card of ADR 0009). The picker keeps its red
+ * target reticle in place (ADR 0009); this panel is the numbers beside it.
  *
- * It is no longer a full-bleed opaque cover: it must not hide the annotated
- * picker. Reserving its height in the grid does not fit a phone (history/0001),
- * so it is still an overlay — just a card, not a curtain.
+ * Result elements are toggled with `visibility`, not `display`, precisely so the
+ * layout is byte-identical before and after the reveal. Their *content* is still
+ * cleared until reveal, so nothing about the target sits in the DOM while the
+ * player is guessing (SPEC §9.4) — `visibility: hidden` alone would leave the
+ * text there to be read.
+ *
+ * The raw ΔE is deliberately shown beside the score: hiding the number the score
+ * was computed from is what makes a scoring system look rigged.
  */
 
 import { oklchToCss } from "@/color/format";
@@ -31,9 +35,9 @@ export type RevealHandlers = {
 
 export type RevealOptions = {
   /**
-   * Hex approximation of a colour. Injected for the same reason the preview does
-   * it — `src/color/format.ts` has no hex formatter yet (BACKLOG 1.4) — so the
-   * hex row renders `—` rather than a number this module would have to invent.
+   * Hex approximation of a colour. Injected because `src/color/format.ts` has no
+   * hex formatter yet (BACKLOG 1.4); without it the hex rows render `—` rather
+   * than a number this module would have to invent.
    */
   readonly formatHex?: (color: Oklch) => string;
 };
@@ -44,12 +48,17 @@ export type Reveal = {
   destroy(): void;
 };
 
-function addChip(row: HTMLElement, label: string): HTMLElement {
+function addChip(
+  row: HTMLElement,
+  label: string,
+  chipClass: string,
+  figureClass: string,
+): HTMLElement {
   const figure = document.createElement("figure");
-  figure.className = "reveal-item";
+  figure.className = figureClass;
 
   const chip = document.createElement("div");
-  chip.className = "reveal-chip";
+  chip.className = chipClass;
 
   const caption = document.createElement("figcaption");
   caption.textContent = label;
@@ -103,9 +112,14 @@ function currentResult(state: GameState): RoundResult | undefined {
   return state.results[state.results.length - 1];
 }
 
-/** The OKLCh coordinates, formatted the way the preview readout formats them. */
+/** The OKLCh coordinates, formatted the way the readout shows them. */
 function coords(color: Oklch): { L: string; c: string; h: string } {
   return { L: color.L.toFixed(3), c: color.c.toFixed(3), h: `${color.h.toFixed(1)}°` };
+}
+
+/** Phases in which the player's guess exists and is worth showing live. */
+function hasGuess(state: GameState): boolean {
+  return state.phase === "picking" || state.phase === "reveal";
 }
 
 export function createReveal(
@@ -117,17 +131,19 @@ export function createReveal(
 
   const section = document.createElement("section");
   section.className = "reveal";
-  section.setAttribute("aria-label", "Round result");
-  section.hidden = true;
-
-  const card = document.createElement("div");
-  card.className = "reveal-card";
+  section.setAttribute("aria-label", "Your guess and the round result");
 
   const pair = document.createElement("div");
   pair.className = "reveal-pair";
-  // Target first, guess second — the same order the compare columns use.
-  const targetChip = addChip(pair, "Target");
-  const guessChip = addChip(pair, "Your guess");
+  // Your guess is always shown; the target sits in a reserved slot beside it and
+  // only appears once the round is over.
+  const guessChip = addChip(pair, "Your guess", "reveal-chip", "reveal-item");
+  const targetChip = addChip(
+    pair,
+    "Target",
+    "reveal-chip reveal-chip--target",
+    "reveal-item reveal-item--target",
+  );
 
   const stats = document.createElement("dl");
   stats.className = "reveal-stats";
@@ -135,18 +151,18 @@ export function createReveal(
   const scoreValue = addStat(stats, "Round score", "reveal-score");
   const totalValue = addStat(stats, "Total", "reveal-total");
 
-  // Your value against the target's, so the gap the reticle shows on the picker
-  // is also readable as numbers (SPEC §8 — never colour alone).
   const compare = document.createElement("dl");
   compare.className = "reveal-compare";
   const head = document.createElement("div");
   head.className = "reveal-compare-row reveal-compare-head";
   head.setAttribute("aria-hidden", "true");
-  for (const label of ["", "You", "Target"]) {
-    const cell = document.createElement("span");
-    cell.textContent = label;
-    head.append(cell);
-  }
+  const headSpacer = document.createElement("span");
+  const headYou = document.createElement("span");
+  headYou.textContent = "You";
+  const headTarget = document.createElement("span");
+  headTarget.className = "reveal-compare-head-target";
+  headTarget.textContent = "Target";
+  head.append(headSpacer, headYou, headTarget);
   compare.append(head);
   const hexRow = addCompareRow(compare, "hex");
   const lightnessRow = addCompareRow(compare, "L");
@@ -164,8 +180,7 @@ export function createReveal(
   next.className = "reveal-next";
   next.textContent = "Next round";
 
-  card.append(pair, stats, compare, explain, next);
-  section.append(card);
+  section.append(pair, stats, compare, explain, next);
   root.append(section);
 
   function onClick(): void {
@@ -176,38 +191,46 @@ export function createReveal(
   let renderedKey: string | null = null;
 
   function update(state: GameState): void {
-    const visible = state.phase === "reveal";
-    const result = visible ? currentResult(state) : undefined;
+    const live = hasGuess(state);
+    const revealed = state.phase === "reveal";
+    const result = revealed ? currentResult(state) : undefined;
 
-    const targetCss = visible ? oklchToCss(state.target) : "";
-    const guessCss = visible ? oklchToCss(state.guess) : "";
+    // The guess is not secret, so it renders live during picking. The target and
+    // everything derived from it stay blank until the round is over.
+    const guessCss = live ? oklchToCss(state.guess) : "";
+    const targetCss = revealed ? oklchToCss(state.target) : "";
     const delta = result === undefined ? EMPTY : result.deltaE.toFixed(3);
     const score = result === undefined ? EMPTY : String(Math.round(result.score));
-    const total = visible ? `${Math.round(totalScore(state))} of ${MAX_GAME_SCORE}` : EMPTY;
+    const total = revealed ? `${Math.round(totalScore(state))} of ${MAX_GAME_SCORE}` : EMPTY;
     const nextLabel = isFinalRound(state) ? "See summary" : "Next round";
 
-    const key = `${visible ? "1" : "0"}|${targetCss}|${guessCss}|${delta}|${score}|${total}|${nextLabel}`;
+    const key = `${state.phase}|${guessCss}|${targetCss}|${delta}|${score}|${total}|${nextLabel}`;
     if (key === renderedKey) return;
     renderedKey = key;
 
-    section.hidden = !visible;
-    setFillColor(targetChip, targetCss);
+    // The result slots are laid out in every phase; `is-revealed` only flips their
+    // visibility, so their appearance moves nothing (ADR 0010).
+    section.classList.toggle("is-revealed", revealed);
+    // No guess yet during memorize — the panel reads as waiting, not broken.
+    section.classList.toggle("is-dim", !live);
+
+    const guess = live ? coords(state.guess) : null;
     setFillColor(guessChip, guessCss);
+    hexRow.you.textContent = live ? (formatHex?.(state.guess) ?? EMPTY) : EMPTY;
+    lightnessRow.you.textContent = guess?.L ?? EMPTY;
+    chromaRow.you.textContent = guess?.c ?? EMPTY;
+    hueRow.you.textContent = guess?.h ?? EMPTY;
+
+    const target = revealed ? coords(state.target) : null;
+    setFillColor(targetChip, targetCss);
+    hexRow.target.textContent = revealed ? (formatHex?.(state.target) ?? EMPTY) : EMPTY;
+    lightnessRow.target.textContent = target?.L ?? EMPTY;
+    chromaRow.target.textContent = target?.c ?? EMPTY;
+    hueRow.target.textContent = target?.h ?? EMPTY;
     deltaValue.textContent = delta;
     scoreValue.textContent = score;
     totalValue.textContent = total;
     next.textContent = nextLabel;
-
-    const guess = visible ? coords(state.guess) : null;
-    const target = visible ? coords(state.target) : null;
-    hexRow.you.textContent = visible ? (formatHex?.(state.guess) ?? EMPTY) : EMPTY;
-    hexRow.target.textContent = visible ? (formatHex?.(state.target) ?? EMPTY) : EMPTY;
-    lightnessRow.you.textContent = guess?.L ?? EMPTY;
-    lightnessRow.target.textContent = target?.L ?? EMPTY;
-    chromaRow.you.textContent = guess?.c ?? EMPTY;
-    chromaRow.target.textContent = target?.c ?? EMPTY;
-    hueRow.you.textContent = guess?.h ?? EMPTY;
-    hueRow.target.textContent = target?.h ?? EMPTY;
   }
 
   function destroy(): void {

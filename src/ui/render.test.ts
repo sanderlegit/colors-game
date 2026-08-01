@@ -78,14 +78,7 @@ beforeEach(() => {
 describe("createGameView", () => {
   it("builds the regions styles.css documents", () => {
     const { root } = setup();
-    for (const region of [
-      ".game",
-      ".game-hud",
-      ".game-stage",
-      ".game-side",
-      ".game-result",
-      ".game-menu",
-    ]) {
+    for (const region of [".game", ".game-hud", ".game-stage", ".game-side", ".game-menu"]) {
       expect(root.querySelector(region), region).not.toBeNull();
     }
   });
@@ -165,9 +158,9 @@ describe("createGameView", () => {
 
   it("passes an absent hex formatter as omitted rather than undefined", () => {
     // exactOptionalPropertyTypes makes this a compile-time concern; the runtime
-    // check is that the preview still renders its placeholder.
+    // check is that the side panel still renders its placeholder.
     const { root, view } = setup();
     view.update(stateWith({ phase: "picking" }));
-    expect(root.querySelector(".preview")).not.toBeNull();
+    expect(root.querySelector(".reveal")).not.toBeNull();
   });
 });

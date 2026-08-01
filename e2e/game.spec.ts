@@ -58,11 +58,10 @@ test("the target color is not in the DOM once picking starts", async ({ page }) 
   const fillStyle = await page.locator(".swatch-fill").getAttribute("style");
   expect(fillStyle ?? "").not.toContain("oklch");
 
-  // The reveal chips must not be pre-populated either.
-  const revealChip = page.locator(".reveal-chip").first();
-  if (await revealChip.count()) {
-    expect((await revealChip.getAttribute("style")) ?? "").not.toContain("oklch");
-  }
+  // The guess chip shows the (non-secret) guess live, but the target chip must
+  // stay blank until the round is over.
+  const targetChipStyle = await page.locator(".reveal-chip--target").getAttribute("style");
+  expect(targetChipStyle ?? "").not.toContain("oklch");
 
   // Nor the reveal reticle (ADR 0009): it only carries the target during reveal.
   const reticleStyle = await page.locator(".picker-target").getAttribute("style");
@@ -81,18 +80,18 @@ test("the picker is inert during the dissolve", async ({ page }) => {
   await expect(page.locator(".swatch-picker-slot")).toHaveCSS("pointer-events", "auto");
 });
 
-test("swatch and preview are both on screen without scrolling", async ({ page }) => {
+test("swatch and side panel are both on screen without scrolling", async ({ page }) => {
   await playToPicking(page);
 
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error("no viewport");
 
   const swatch = await box(page.locator(".swatch-stack"));
-  const preview = await box(page.locator(".preview"));
+  const side = await box(page.locator(".reveal"));
 
   for (const [name, rect] of [
     ["swatch", swatch],
-    ["preview", preview],
+    ["side panel", side],
   ] as const) {
     expect(rect.y, `${name} top`).toBeGreaterThanOrEqual(-1);
     expect(rect.y + rect.height, `${name} bottom`).toBeLessThanOrEqual(viewport.height + 1);
@@ -110,9 +109,15 @@ test("the confirm button is unavailable until the picker has been moved", async 
   await expect(page.locator(".hud-confirm")).toBeDisabled();
 });
 
-test("the reveal keeps the annotated picker in place (ADR 0009)", async ({ page }) => {
+test("the reveal fills its reserved place without shifting anything (ADR 0010)", async ({
+  page,
+}) => {
   await playToPicking(page);
-  const before = await box(page.locator(".swatch-stack"));
+  // The board and the side panel, measured before the guess is even submitted.
+  const stageBefore = await box(page.locator(".swatch-stack"));
+  const panelBefore = await box(page.locator(".reveal"));
+  // The target column is present but not yet shown while picking.
+  await expect(page.locator(".reveal-chip--target")).toBeHidden();
 
   const plane = await box(page.locator(".picker-plane"));
   await page.mouse.move(plane.x + plane.width * 0.3, plane.y + plane.height * 0.4);
@@ -120,14 +125,16 @@ test("the reveal keeps the annotated picker in place (ADR 0009)", async ({ page 
   await page.mouse.move(plane.x + plane.width * 0.4, plane.y + plane.height * 0.3, { steps: 5 });
   await page.mouse.up();
   await page.locator(".hud-confirm").click();
-  await expect(page.locator(".reveal")).toBeVisible();
 
-  // The card is an overlay precisely so this holds: reserving its height in the
-  // grid does not fit on a 664px phone alongside the swatch (history/0001).
-  expectSameRect(await box(page.locator(".swatch-stack")), before, "stage across reveal");
+  // The target fills into a slot that was already there...
+  await expect(page.locator(".reveal-chip--target")).toBeVisible();
 
-  // The picker is still on screen and the target reticle is drawn on it, within
-  // the plane's box — this is the whole point of leaving the board up (ADR 0009).
+  // ...so the board and the side panel occupy exactly the same boxes as before —
+  // nothing on screen moves when the round ends (ADR 0010).
+  expectSameRect(await box(page.locator(".swatch-stack")), stageBefore, "stage across reveal");
+  expectSameRect(await box(page.locator(".reveal")), panelBefore, "side panel across reveal");
+
+  // The picker stays on screen with the red target reticle inside the plane box.
   await expect(page.locator(".picker-plane")).toBeVisible();
   const reticle = page.locator(".picker-target");
   await expect(reticle).toBeVisible();
@@ -139,13 +146,6 @@ test("the reveal keeps the annotated picker in place (ADR 0009)", async ({ page 
   expect(cx, "reticle x within plane").toBeLessThanOrEqual(planeNow.x + planeNow.width + 1);
   expect(cy, "reticle y within plane").toBeGreaterThanOrEqual(planeNow.y - 1);
   expect(cy, "reticle y within plane").toBeLessThanOrEqual(planeNow.y + planeNow.height + 1);
-
-  // The result card itself is within the viewport.
-  const viewport = page.viewportSize();
-  if (viewport === null) throw new Error("no viewport");
-  const card = await box(page.locator(".reveal-card"));
-  expect(card.y).toBeGreaterThanOrEqual(-1);
-  expect(card.y + card.height).toBeLessThanOrEqual(viewport.height + 1);
 });
 
 test("a full round: memorize, pick, confirm, score", async ({ page }) => {
@@ -174,8 +174,8 @@ test("a full round: memorize, pick, confirm, score", async ({ page }) => {
   expect(Number(score)).toBeGreaterThanOrEqual(0);
   expect(Number(score)).toBeLessThanOrEqual(100);
 
-  // And the target is visible again now that the round is over.
-  const chipStyle = await page.locator(".reveal-chip").first().getAttribute("style");
+  // And the target chip is populated now that the round is over.
+  const chipStyle = await page.locator(".reveal-chip--target").getAttribute("style");
   expect(chipStyle ?? "").toContain("oklch");
 
   await page.getByRole("button", { name: "Next round" }).click();

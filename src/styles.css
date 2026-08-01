@@ -174,13 +174,13 @@ p {
        .game
          .game-hud     ← createHud(root, …)
          .game-stage   ← createSwatch(root, …)     (picker mounts into its slot)
-         .game-side    ← createPreview(root, …)
-         .game-result  ← createReveal(root, …)
+         .game-side    ← createReveal(root, …)     (live guess + round result,
+                                                    ADR 0010)
          .game-menu    ← createMenu(root, …)       (overlays everything when
                                                     idle or at the summary)
 
-   Both the swatch and the preview are on screen at every viewport size without a
-   scroll. That is a constraint, not an aspiration: it is asserted in e2e at
+   Both the swatch and the side panel are on screen at every viewport size without
+   a scroll. That is a constraint, not an aspiration: it is asserted in e2e at
    iPhone 14 size.
    --------------------------------------------------------------------------- */
 .game {
@@ -188,16 +188,16 @@ p {
   min-height: 100dvh;
   gap: var(--space-3);
   padding: var(--space-3);
-  /* Phones anchor to the top so the reveal card (a bottom sheet at this width,
-     ADR 0009) has room below the board instead of covering it. The position is
-     the same in every phase, so the memorize→picking geometry still holds. */
+  /* Phones anchor to the top so the side panel — which reserves room for the
+     round result in every phase (ADR 0010) — has space below the board. The
+     stack is the same size in every phase, so the memorize→picking geometry
+     holds and nothing shifts on reveal. */
   align-content: start;
   justify-items: center;
   grid-template-areas:
     "hud"
     "stage"
-    "side"
-    "result";
+    "side";
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -222,36 +222,24 @@ p {
 .game-side {
   grid-area: side;
   width: 100%;
-  /* SPEC §4: the preview keeps a real presence when stacked, not a sliver. */
+  /* SPEC §4: the side panel keeps a real presence when stacked, not a sliver. */
   min-height: 20vh;
 }
 
-/* Transparent to layout, exactly like `.game-menu`. The reveal panel is an
-   overlay, so the board behind it never moves when a round ends.
-
-   Reserving the panel's height instead was the obvious fix and does not work:
-   it is ~300px, and on a 664px phone that does not coexist with a 273px swatch,
-   the HUD and the preview. It also rendered partly below the fold. */
-.game-result {
-  display: contents;
-}
-
-/* SPEC §4: at 640px and up the preview sits to the right of the swatch. */
+/* SPEC §4: at 640px and up the side panel sits to the right of the swatch. */
 @media (min-width: 640px) {
   .game {
     grid-template-columns: auto minmax(15rem, 22rem);
     grid-template-areas:
       "hud    hud"
-      "stage  side"
-      "result result";
+      "stage  side";
     justify-items: stretch;
     align-items: center;
-    /* There is room to breathe here, and the reveal card floats to the side
-       rather than below, so the board can sit centred again. */
+    /* There is room to breathe here, so the board can sit centred again. */
     align-content: center;
     /* Centre the two column tracks rather than letting them spread to the
        viewport edges — on a wide monitor that left a dead gap between the
-       picker and the preview it is meant to be read against. */
+       picker and the panel it is meant to be read against. */
     justify-content: center;
     column-gap: var(--space-5);
   }
@@ -369,52 +357,6 @@ p {
   touch-action: none;
 }
 
-/* --- Preview + readout (SPEC §4, §8) ------------------------------------- */
-.preview {
-  display: grid;
-  grid-template-rows: minmax(6rem, 1fr) auto;
-  gap: var(--space-2);
-  width: 100%;
-  transition: opacity var(--duration-base) var(--ease-out);
-}
-
-/* SPEC §3: during memorize there is no guess, so the panel reads as empty. */
-.preview.is-dim {
-  opacity: 0.45;
-}
-
-.preview-fill {
-  min-height: 6rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--fill-color, transparent);
-}
-
-/* SPEC §8: the numeric readout is an accessibility requirement. It is always
-   rendered and must never be hidden behind a debug flag. */
-.preview-readout {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
-  gap: var(--space-1) var(--space-3);
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.preview-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.preview-row dt {
-  color: var(--color-muted);
-}
-
-.preview-value {
-  font-weight: 600;
-}
-
 /* --- HUD (SPEC §3, §5.4, §8) --------------------------------------------- */
 .hud {
   display: flex;
@@ -493,52 +435,53 @@ p {
   font-size: 0.875rem;
 }
 
-/* --- Reveal (SPEC §6, ADR 0009) ------------------------------------------ */
+/* --- Side panel: live guess + round result (SPEC §4, §6, §8, ADR 0010) --- */
 
-/* No longer a full-bleed curtain: the score screen annotates the picker in place
-   (ADR 0009), so the result reads as a card that leaves the board visible. The
-   section spans the viewport only to position the card and is click-through; the
-   card itself is the only interactive surface. Reserving the card's height in the
-   grid instead does not fit a phone beside the swatch (history/0001), so it stays
-   an overlay. */
+/* One persistent panel in the side region: the live guess while picking, the
+   full result after confirm. Every slot is laid out in every phase — the reveal
+   only flips visibility on the result-only elements below — so nothing on screen
+   moves when the round ends (ADR 0010, superseding the floating card of 0009). */
 .reveal {
-  position: fixed;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  /* Phone: the card sits at the bottom, board above it. */
-  align-items: flex-end;
-  justify-content: center;
-  padding: calc(var(--space-3) + var(--safe-top)) var(--space-3)
-    calc(var(--space-3) + var(--safe-bottom));
-  pointer-events: none;
-}
-
-.reveal[hidden] {
-  display: none;
-}
-
-.reveal-card {
   display: grid;
   gap: var(--space-3);
-  width: min(100%, 26rem);
-  max-height: 100%;
-  padding: var(--space-4);
-  overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background-color: var(--color-surface);
-  box-shadow: 0 8px 30px rgb(0 0 0 / 28%);
-  /* Only the card catches the pointer; taps outside it fall through to the inert
-     board rather than being swallowed by a transparent backdrop. */
-  pointer-events: auto;
+  align-content: start;
+  width: 100%;
+  transition: opacity var(--duration-base) var(--ease-out);
 }
 
-/* Target and guess abut into one split rectangle so the difference reads
-   edge-to-edge, captions beneath. */
+/* SPEC §3: during memorize there is no guess, so the panel reads as waiting. */
+.reveal.is-dim {
+  opacity: 0.45;
+}
+
+/* Result-only elements: laid out always, shown only once revealed. Toggling
+   `visibility` (not `display`) is exactly what keeps the reveal from shifting
+   anything — the space is reserved before the values arrive. Their text content
+   is cleared until then, so the target never sits in the DOM early (SPEC §9.4). */
+.reveal-item--target,
+.reveal-stats,
+.reveal-compare-head-target,
+.reveal-compare-target,
+.reveal-explain,
+.reveal-next {
+  visibility: hidden;
+}
+
+.reveal.is-revealed .reveal-item--target,
+.reveal.is-revealed .reveal-stats,
+.reveal.is-revealed .reveal-compare-head-target,
+.reveal.is-revealed .reveal-compare-target,
+.reveal.is-revealed .reveal-explain,
+.reveal.is-revealed .reveal-next {
+  visibility: visible;
+}
+
+/* Your guess and the target sit side by side — each half the width — so the
+   difference reads at a glance. The target chip's slot is held during picking
+   and simply fills in on reveal. */
 .reveal-pair {
   display: flex;
-  gap: 0;
+  gap: var(--space-2);
 }
 
 .reveal-item {
@@ -552,17 +495,10 @@ p {
 .reveal-chip {
   width: 100%;
   aspect-ratio: 2 / 1;
+  min-height: 3rem;
   border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--fill-color, transparent);
-}
-
-.reveal-item:first-child .reveal-chip {
-  border-right: none;
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
-}
-
-.reveal-item:last-child .reveal-chip {
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 /* SPEC §6: the raw ΔE sits beside the score on purpose — hiding the input to the
@@ -638,33 +574,39 @@ p {
   font-size: 0.8125rem;
 }
 
-/* Phones: the card is a bottom sheet, so keep it short — the whole point is that
-   the annotated board above it stays visible. The split swatch becomes a strip
-   and the spacing tightens; it scrolls if it still cannot fit. */
+/* The advance button spans the panel: an easy target, and it anchors the bottom
+   of the reserved layout so the reveal fills a place that was already there. */
+.reveal-next {
+  justify-self: stretch;
+}
+
+/* Phones: keep the panel compact so the board and the panel both fit without a
+   scroll (SPEC §4). The swatches become a short strip, the stats shrink, and the
+   explanatory prose is dropped — there is no room for it beside the board, and
+   the numbers carry the same information. */
 @media (max-width: 639px) {
-  .reveal-card {
+  .game {
     gap: var(--space-2);
-    padding: var(--space-3);
-    max-height: 62dvh;
+  }
+
+  .reveal {
+    gap: var(--space-1);
   }
 
   .reveal-chip {
     aspect-ratio: auto;
-    height: 2.5rem;
+    /* `min-height` from the base rule would otherwise win and keep the strip
+       tall; clear it so the phone strip is genuinely short. */
+    min-height: 0;
+    height: 1.75rem;
+  }
+
+  .reveal-stat dd {
+    font-size: 1rem;
   }
 
   .reveal-explain {
-    font-size: 0.75rem;
-  }
-}
-
-/* Desktop: the board sits left, so the card floats to the right of it rather
-   than at the bottom — the annotated picker stays fully in view. */
-@media (min-width: 640px) {
-  .reveal {
-    align-items: center;
-    justify-content: flex-end;
-    padding: var(--space-4) calc(var(--space-5) + var(--safe-right)) var(--space-4) var(--space-4);
+    display: none;
   }
 }
 
@@ -675,7 +617,7 @@ p {
 @media (prefers-reduced-motion: reduce) {
   .swatch-fill,
   .swatch-picker-slot,
-  .preview,
+  .reveal,
   .hud-confirm,
   .reveal-next {
     transition-duration: 0ms !important;
