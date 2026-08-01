@@ -188,16 +188,17 @@ p {
   min-height: 100dvh;
   gap: var(--space-3);
   padding: var(--space-3);
-  /* Phones anchor to the top so the side panel — which reserves room for the
-     round result in every phase (ADR 0010) — has space below the board. The
-     stack is the same size in every phase, so the memorize→picking geometry
-     holds and nothing shifts on reveal. */
+  /* Phones anchor to the top and put the picker at the bottom, in the thumb zone,
+     with the confirm button (in the HUD) right above it. The glanceable info —
+     the guess/target blobs and readout — sits up top. The stack is the same size
+     in every phase, so the memorize→picking geometry holds and nothing shifts on
+     reveal (ADR 0010). */
   align-content: start;
   justify-items: center;
   grid-template-areas:
+    "side"
     "hud"
-    "stage"
-    "side";
+    "stage";
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -587,18 +588,23 @@ p {
 @media (max-width: 639px) {
   .game {
     gap: var(--space-2);
+    padding: var(--space-2);
+    /* The picker moves to the thumb zone, so it can be a touch smaller and still
+       be precise; the room it gives back pays for the taller comparison blobs and
+       keeps everything on one screen (SPEC §4). */
+    --swatch-size: min(64vw, 42vh);
   }
 
   .reveal {
     gap: var(--space-1);
   }
 
+  /* Taller blobs so the guess and target colours are easy to compare by eye.
+     `min-height` from the base rule would otherwise pin the height, so clear it. */
   .reveal-chip {
     aspect-ratio: auto;
-    /* `min-height` from the base rule would otherwise win and keep the strip
-       tall; clear it so the phone strip is genuinely short. */
     min-height: 0;
-    height: 1.75rem;
+    height: 4rem;
   }
 
   .reveal-stat dd {
