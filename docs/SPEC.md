@@ -42,7 +42,7 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 | `idle`     | Title, "Play" button, best score                                                       | `START`             |
 | `memorize` | Swatch filled with the target color + a 5s countdown ring. Preview panel is empty/dim | timer reaches 0     |
 | `picking`  | Swatch area cross-faded into the picker; preview panel shows the live guess; Confirm   | `CONFIRM`           |
-| `reveal`   | Target and guess side by side, ΔE00, round score, running total                        | `NEXT`              |
+| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, your-vs-target coords (ADR 0009) | `NEXT`              |
 | `summary`  | Per-round breakdown, total score, best-ever, replay + share-seed                        | `RESTART`           |
 
 - **Rounds per game: 5.** Long enough to smooth out luck, short enough for one sitting.
@@ -132,6 +132,11 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
   random-guess distribution is heavily right-skewed and a mean misleads.
 - The reveal screen shows the raw ΔE alongside the score. Showing the underlying
   number builds trust in the scoring; hiding it invites accusations of rigging.
+- The reveal also marks where the target sat **on the picker the player just
+  used** — a red reticle on the plane and bar beside the frozen guess, with the
+  your-vs-target coordinates spelled out (ADR 0009). This is a learning aid, not
+  a scoring change, and it appears only once the round is over: nothing about the
+  target reaches the DOM during `picking` (§9.4 holds).
 - Game score = sum of round scores (max 500).
 
 Scoring invariants, enforced as property tests (§9.2):

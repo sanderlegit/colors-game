@@ -55,10 +55,13 @@ src/
     *.test.ts
   ui/
     swatch.ts         the shared rect: color fill layer + picker layer + dissolve
-    picker.ts         hue x chroma plane (canvas) + lightness bar (ADR 0007)
+                      (keeps the picker visible through reveal, ADR 0009)
+    picker.ts         hue x chroma plane (canvas) + lightness bar (ADR 0007);
+                      reveal-only target reticle + guess-to-target gap (ADR 0009)
     preview.ts        live guess panel + numeric readout
     hud.ts            countdown, round counter, confirm button
-    reveal.ts         target vs guess, ΔE, score
+    reveal.ts         target-vs-guess card beside the annotated picker (ADR 0009):
+                      split swatch, ΔE, score, your-vs-target coords, explanation
     render.ts         mount(root) -> { update(state) }
     *.test.ts
   platform/

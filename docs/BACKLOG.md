@@ -50,7 +50,7 @@ Every item's exit criteria include `npm run verify` green.
 | 3.2 | E2E happy path + no-target-in-DOM | ✅ Full round plays through on both projects. |
 | 3.3 | Keyboard-only playthrough, visible focus, reduced motion | ⬜ **Not done.** Unit-tested; needs a manual keyboard-only pass. |
 | 3.4 | Real-device pass over LAN dev server | ⬜ **Not done.** Needs a physical iPhone; the loupe and take-off selection cannot be validated in an emulated viewport. |
-| 3.5 | Perf budget: bundle ≤30KB gz, repaint ≤4ms @2× | ⚠️ Bundle ✅ **9.6 KB gz**. Repaint ❌ **11ms** final / 6.7ms draft at 800×700 — over the 4ms budget. |
+| 3.5 | Perf budget: bundle ≤30KB gz, repaint ≤4ms @2× | ⚠️ Bundle ✅ **10.0 KB gz** JS (+2.8 KB gz CSS). Repaint ❌ **11ms** final / 6.7ms draft at 800×700 — over the 4ms budget. |
 
 ### What 3.1 caught
 
@@ -77,6 +77,10 @@ memorized-rect-vs-picker (does not, and needs the test).
   floor, but this is a real gap rather than a decision.
 - **Settings UI does not exist.** SPEC §8 promises a 3s/5s/8s memorize choice;
   storage and the reducer both support it, nothing surfaces it.
+- **The reveal card can occlude the bottom of the picker on a short phone**
+  (ADR 0009). The board top-anchors to make room, but the card's top edge may
+  still cover the lower plane and the lightness bar. The numeric readout carries
+  the same information; a shorter or collapsible sheet would fully fix it.
 
 ## Deliberately deferred
 

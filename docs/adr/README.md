@@ -17,6 +17,7 @@ the most valuable thing in here.
 | [0006](0006-afterimage-mask.md) | Dissolve through a neutral afterimage mask | **superseded by 0008** |
 | [0007](0007-picker-shows-every-hue.md) | Picker plane shows every hue; lightness on a bar | accepted |
 | [0008](0008-dissolve-straight-into-the-picker.md) | Dissolve goes straight into the picker | accepted |
+| [0009](0009-score-screen-in-place-reticle.md) | Score screen keeps the picker in place with a target reticle | accepted |
 
 ## Already rejected — do not re-propose without new evidence
 

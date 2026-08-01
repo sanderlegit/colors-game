@@ -13,6 +13,7 @@ turned out to be wrong, say so in the newer entry.
 | # | Session | What came out of it |
 |---|---------|---------------------|
 | [0001](0001-initial-build.md) | 2026-08-01 — initial build | Whole game from empty directory. Two design reversals after playtest, three layout bugs only visible at phone viewport. |
+| [0002](0002-reveal-reticle.md) | 2026-08-02 — reveal reticle | Score screen keeps the picker in place with a target reticle (ADR 0009). Phone bottom-sheet vs centred board; stale dev-server reuse trap. |
 
 ## Auditing the docs
 
@@ -50,6 +51,14 @@ Discovered the hard way. Each one cost real time; none is guessable from the cod
 - **Biome's `complexity/noImportantStyles` is disabled repo-wide** for one reason:
   the `prefers-reduced-motion` block legitimately needs `!important` to beat the
   inline `--dissolve-duration` the swatch writes.
+- **Playwright reuses a stale `vite dev` server.** `reuseExistingServer` is on
+  when not CI, so if a dev server is already listening on port 5173 — even one
+  from a *different checkout* — the whole e2e suite runs against its code, not
+  yours. The symptom is "element(s) not found" for a node that plainly exists in
+  your source and build. From a worktree, run against a server on another port
+  (a throwaway config with a different `PORT` and `reuseExistingServer: true`),
+  or stop the stale one. Do not assume a green/red e2e reflects your tree until
+  you know which server answered. (history/0002)
 
 ### Testing
 
