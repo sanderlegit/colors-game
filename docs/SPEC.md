@@ -42,7 +42,7 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 | `idle`     | Title, "Play" button, best score                                                       | `START`             |
 | `memorize` | Swatch filled with the target color + a 5s countdown ring. Preview panel is empty/dim | timer reaches 0     |
 | `picking`  | Swatch area cross-faded into the picker; preview panel shows the live guess; Confirm   | `CONFIRM`           |
-| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, your-vs-target coords (ADR 0009) | `NEXT`              |
+| `reveal`   | Picker held in place with a red target reticle; the side panel's target swatch, ΔE00, score, total and target coords appear in their reserved slots — nothing shifts (ADR 0010) | `NEXT`              |
 | `summary`  | Per-round breakdown, total score, best-ever, replay + share-seed                        | `RESTART`           |
 
 - **Rounds per game: 5.** Long enough to smooth out luck, short enough for one sitting.
@@ -58,22 +58,26 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 Two regions, always both visible, never requiring a scroll:
 
 ```
- ┌──────────────────────────┐  ┌───────────┐
- │                          │  │  PREVIEW  │   ← your current guess, large flat fill
- │      SWATCH / PICKER     │  │           │
- │   (same rect, always)    │  ├───────────┤
- │                          │  │  readout  │   ← hex + coords, monospace
- └──────────────────────────┘  └───────────┘
+ ┌──────────────────────────┐  ┌─────────────────┐
+ │                          │  │ SIDE PANEL      │  ← one persistent place
+ │      SWATCH / PICKER     │  │  You │ Target   │    (ADR 0010): live guess
+ │   (same rect, always)    │  │  ΔE · score     │    while picking; the target,
+ │                          │  │  readout        │    ΔE and score fill their
+ └──────────────────────────┘  └─────────────────┘    reserved slots on reveal
         ▲ lightness bar directly beneath, same width (ADR 0007)
 ```
 
-- **≥ 640px wide:** preview sits to the right of the swatch, as specified.
-- **< 640px (portrait phones):** preview moves *below* the swatch and lightness bar,
-  full width, min-height 20vh. Both remain on screen simultaneously — this is a
-  layout constraint, not a suggestion. Verified in e2e at iPhone 14 viewport.
+- The side panel is one component: the live guess readout during `picking`, and
+  the full round result after `CONFIRM`. The result elements occupy reserved
+  slots in every phase, so the reveal shifts nothing (ADR 0010).
+- **≥ 640px wide:** the side panel sits to the right of the swatch, as specified.
+- **< 640px (portrait phones):** it moves *below* the swatch and lightness bar,
+  full width. Both remain on screen simultaneously — this is a layout constraint,
+  not a suggestion. Verified in e2e at iPhone 14 viewport. The panel is compacted
+  at this width (short swatch strips; the ΔE prose is dropped) so it fits.
 - The swatch is a fixed aspect ratio (1:1) sized by `min(70vw, 50vh)` so it never
-  pushes the preview or the confirm button below the fold, including with the iOS
-  URL bar visible. Safe-area insets respected.
+  pushes the side panel or the confirm button below the fold, including with the
+  iOS URL bar visible. Safe-area insets respected.
 
 ## 5. Mechanics
 
@@ -133,10 +137,11 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
 - The reveal screen shows the raw ΔE alongside the score. Showing the underlying
   number builds trust in the scoring; hiding it invites accusations of rigging.
 - The reveal also marks where the target sat **on the picker the player just
-  used** — a red reticle on the plane and bar beside the frozen guess, with the
-  your-vs-target coordinates spelled out (ADR 0009). This is a learning aid, not
-  a scoring change, and it appears only once the round is over: nothing about the
-  target reaches the DOM during `picking` (§9.4 holds).
+  used** — a red reticle on the plane and bar beside the frozen guess (ADR 0009)
+  — while the side panel fills in the target swatch and the your-vs-target
+  coordinates in slots it reserved during picking, so nothing shifts (ADR 0010).
+  This is a learning aid, not a scoring change, and it appears only once the round
+  is over: nothing about the target reaches the DOM during `picking` (§9.4 holds).
 - Game score = sum of round scores (max 500).
 
 Scoring invariants, enforced as property tests (§9.2):

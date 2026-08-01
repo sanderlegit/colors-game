@@ -70,22 +70,24 @@ Wiring it needs a field on `Settings` and a control in the menu — see
 | `COARSE_MULTIPLIER` | 10 | **Shift makes steps coarser, never finer.** |
 | `DRAFT_SAMPLES` / `FINAL_SAMPLES` | 24k / 120k | Draft lattice during a lightness drag, refined 120ms after it settles. This is the repaint-budget trade — see `BACKLOG.md`. |
 
-## Reveal reticle
+## Score screen: reticle and side panel
 
-`src/styles.css` · [ADR 0009](adr/0009-score-screen-in-place-reticle.md)
+`src/styles.css` · [ADR 0009](adr/0009-score-screen-in-place-reticle.md),
+[ADR 0010](adr/0010-result-in-a-persistent-side-panel.md)
 
-The score screen marks where the target sat on the picker. These are CSS, not
-TypeScript constants:
+The score screen marks where the target sat on the picker and fills the side
+panel's reserved slots. These are CSS, not TypeScript constants:
 
 | Knob | Where | Now | Notes |
 |------|-------|----:|-------|
 | `--color-target` | `:root` (+ dark override) | `#e5484d` / `#ff6369` | The reticle red and the tint on the "Target" readout column. Change both or the two drift apart. |
 | `.picker-target` size | `.picker-target` | 26px | The plane reticle. Deliberately larger than the 22px `.picker-cursor` so it frames the guess when they coincide. |
-| `.reveal-card` `max-height` | `@media (max-width: 639px)` | 62dvh | How tall the phone bottom-sheet may grow before it scrolls. Raising it eats into the visible board (ADR 0009 § known limitation). |
+| `.reveal-chip` height | `@media (max-width: 639px)` | 1.75rem | The phone swatch-strip height. The whole panel must fit beside the board with no scroll (SPEC §4), so raising this is the first thing that pushes it over. |
 
-The reveal card position (side-docked ≥640px, bottom sheet below) lives in the
-`.reveal` rules; the whole game top-anchors at phone widths (`.game`
-`align-content`) so the sheet has room — see ADR 0009.
+The panel is inline in the side region — result elements are laid out in every
+phase and only their `visibility` flips on reveal, which is what keeps the reveal
+from shifting anything (ADR 0010). At phone widths the game top-anchors (`.game`
+`align-content`) and the ΔE prose is `display: none` so the panel fits.
 
 ## Things that are not knobs
 

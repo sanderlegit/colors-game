@@ -14,6 +14,7 @@ turned out to be wrong, say so in the newer entry.
 |---|---------|---------------------|
 | [0001](0001-initial-build.md) | 2026-08-01 — initial build | Whole game from empty directory. Two design reversals after playtest, three layout bugs only visible at phone viewport. |
 | [0002](0002-reveal-reticle.md) | 2026-08-02 — reveal reticle | Score screen keeps the picker in place with a target reticle (ADR 0009). Phone bottom-sheet vs centred board; stale dev-server reuse trap. |
+| [0003](0003-reveal-side-panel.md) | 2026-08-02 — reveal side panel | Result merged into a persistent side panel so nothing shifts on reveal (ADR 0010, supersedes 0009). Corrects 0002's "reserving height doesn't fit a phone". |
 
 ## Auditing the docs
 

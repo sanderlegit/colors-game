@@ -72,9 +72,9 @@ When the round ends, the picker stays put and a **red marker** appears on it,
 showing exactly where the target colour was — right next to your own guess, still
 where you left it. The dashed line between them is your miss: if it points
 sideways you were off on hue, up or down means saturation, and the red marker on
-the lightness bar shows if you were too dark or too light. The card also lists
-your colour against the target's in numbers, so you can see the gap however you
-prefer to read it.
+the lightness bar shows if you were too dark or too light. The panel beside the
+picker also lists your colour against the target's in numbers, so you can see the
+gap however you prefer to read it.
 
 ## A worked example
 

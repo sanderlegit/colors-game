@@ -1,6 +1,11 @@
 # 0009 — The score screen keeps the picker in place with a target reticle
 
-Date: 2026-08-01 · Status: accepted
+Date: 2026-08-01 · Status: **superseded by [ADR 0010](0010-result-in-a-persistent-side-panel.md)**
+
+> **Superseded.** The in-place picker and its red reticle are retained; the
+> *floating card* this ADR introduced for the result is not. ADR 0010 moves the
+> result into the persistent side panel so nothing shifts on reveal. Read both:
+> the reticle reasoning here still holds, the card treatment does not.
 
 ## Context
 
