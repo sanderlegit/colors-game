@@ -321,6 +321,7 @@ p {
 }
 
 .swatch-fill,
+.swatch-mask,
 .swatch-picker-slot {
   grid-area: cell;
   border-radius: inherit;
@@ -329,6 +330,13 @@ p {
 
 .swatch-fill {
   background: var(--fill-color, transparent);
+}
+
+/* ADR 0006: the neutral the dissolve passes through. Deliberately the same mid
+   grey the picker starts on (SPEC §5.3, chroma 0), so the handover between the
+   mask and the picker has no visible seam. */
+.swatch-mask {
+  background: oklch(0.5 0 0);
 }
 
 /* The only element in the swatch that owns a gesture, so the only one that may
@@ -530,6 +538,7 @@ p {
    is disabled repo-wide for exactly this block. */
 @media (prefers-reduced-motion: reduce) {
   .swatch-fill,
+  .swatch-mask,
   .swatch-picker-slot,
   .preview,
   .hud-confirm,

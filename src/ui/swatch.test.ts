@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 import { initialState } from "@/domain/state";
-import { createSwatch, FILL_COLOR_PROPERTY, oklchCss } from "@/ui/swatch";
+import {
+  createSwatch,
+  DISSOLVE_MS,
+  FILL_COLOR_PROPERTY,
+  MASK_HOLD_MS,
+  oklchCss,
+} from "@/ui/swatch";
+
+/** Fade in, hold the neutral mask, fade out (ADR 0006). */
+const FULL_DISSOLVE_MS = DISSOLVE_MS + MASK_HOLD_MS + DISSOLVE_MS;
 
 function stateWith(patch: Partial<GameState>): GameState {
   return { ...initialState(), ...patch };
@@ -68,7 +77,7 @@ describe("createSwatch", () => {
     expect(fill.style.opacity).toBe("1");
   });
 
-  it("keeps the picker slot inert until the dissolve finishes", () => {
+  it("keeps the picker slot inert until the whole dissolve finishes", () => {
     const root = mount();
     const swatch = createSwatch(root);
     swatch.update(stateWith({ phase: "memorize", target: TARGET }));
@@ -76,14 +85,51 @@ describe("createSwatch", () => {
     expect(swatch.pickerSlot.style.pointerEvents).toBe("none");
 
     swatch.update(stateWith({ phase: "picking", target: TARGET }));
-    expect(swatch.pickerSlot.style.opacity).toBe("1");
     // Mid-dissolve: the player is still looking at a half-faded target.
     expect(swatch.pickerSlot.style.pointerEvents).toBe("none");
 
-    vi.advanceTimersByTime(449);
+    vi.advanceTimersByTime(FULL_DISSOLVE_MS - 1);
     expect(swatch.pickerSlot.style.pointerEvents).toBe("none");
 
     vi.advanceTimersByTime(1);
+    expect(swatch.pickerSlot.style.pointerEvents).toBe("auto");
+  });
+
+  it("passes through the neutral mask instead of straight to the picker (ADR 0006)", () => {
+    const root = mount();
+    const swatch = createSwatch(root);
+    const mask = must(root.querySelector<HTMLElement>(".swatch-mask"));
+
+    swatch.update(stateWith({ phase: "memorize", target: TARGET }));
+    expect(mask.style.opacity).toBe("0");
+
+    // Stage 1: the target fades out behind the mask, picker still hidden.
+    swatch.update(stateWith({ phase: "picking", target: TARGET }));
+    expect(mask.style.opacity).toBe("1");
+    expect(swatch.pickerSlot.style.opacity).toBe("0");
+
+    // Stage 2: the mask is held while the afterimage decays.
+    vi.advanceTimersByTime(DISSOLVE_MS);
+    expect(mask.style.opacity).toBe("1");
+    expect(swatch.pickerSlot.style.opacity).toBe("0");
+
+    // Stage 3: the mask fades off the picker.
+    vi.advanceTimersByTime(MASK_HOLD_MS);
+    expect(mask.style.opacity).toBe("0");
+    expect(swatch.pickerSlot.style.opacity).toBe("1");
+  });
+
+  it("keeps the mask hold under reduced motion — it is a correction, not decoration", () => {
+    const root = mount();
+    const swatch = createSwatch(root, { reducedMotion: true });
+
+    swatch.update(stateWith({ phase: "memorize", target: TARGET }));
+    swatch.update(stateWith({ phase: "picking", target: TARGET }));
+
+    // Fades are instant, so the mask is already covering — but not yet lifted.
+    expect(swatch.pickerSlot.style.pointerEvents).toBe("none");
+
+    vi.advanceTimersByTime(MASK_HOLD_MS);
     expect(swatch.pickerSlot.style.pointerEvents).toBe("auto");
   });
 
@@ -94,15 +140,16 @@ describe("createSwatch", () => {
 
     swatch.update(stateWith({ phase: "memorize", target: TARGET }));
     swatch.update(stateWith({ phase: "picking", target: TARGET }));
-    vi.advanceTimersByTime(450);
+    // The color is dropped as soon as the mask covers it, not at the very end.
+    vi.advanceTimersByTime(DISSOLVE_MS);
 
     expect(fillColor(fill)).toBe("");
     expect(root.innerHTML).not.toContain("oklch");
   });
 
-  it("collapses the dissolve to an instant swap under reduced motion", () => {
+  it("collapses the fades to an instant swap under reduced motion", () => {
     const root = mount();
-    const swatch = createSwatch(root, { reducedMotion: true });
+    const swatch = createSwatch(root, { reducedMotion: true, maskHoldMs: 0 });
 
     swatch.update(stateWith({ phase: "memorize", target: TARGET }));
     swatch.update(stateWith({ phase: "picking", target: TARGET }));
@@ -114,7 +161,7 @@ describe("createSwatch", () => {
 
   it("also honours the in-game reduced-motion setting", () => {
     const root = mount();
-    const swatch = createSwatch(root);
+    const swatch = createSwatch(root, { maskHoldMs: 0 });
     const settings = { memorizeMs: 5000, reducedMotion: true };
 
     swatch.update(stateWith({ phase: "memorize", target: TARGET, settings }));
@@ -130,7 +177,7 @@ describe("createSwatch", () => {
 
     swatch.update(stateWith({ phase: "memorize", target: TARGET }));
     swatch.update(picking);
-    vi.advanceTimersByTime(450);
+    vi.advanceTimersByTime(FULL_DISSOLVE_MS);
     expect(swatch.pickerSlot.style.pointerEvents).toBe("auto");
 
     swatch.update(picking);
@@ -161,7 +208,7 @@ describe("createSwatch", () => {
     const fill = must(root.querySelector<HTMLElement>(".swatch-fill"));
 
     swatch.update(stateWith({ phase: "picking", target: TARGET }));
-    vi.advanceTimersByTime(450);
+    vi.advanceTimersByTime(FULL_DISSOLVE_MS);
     swatch.update(stateWith({ phase: "reveal", target: TARGET }));
 
     expect(swatch.pickerSlot.style.pointerEvents).toBe("none");

@@ -34,10 +34,15 @@ This composes naturally with SPEC §5.3, where the picker already starts at zero
 chroma: the mask's grey and the picker's initial state are the same neutral, so
 there is no visible seam between the two stages.
 
-Total transition is ~850ms (450ms fade + 400ms hold). Under
-`prefers-reduced-motion: reduce` the *fades* collapse to 0 but **the mask hold
-does not** — it is a perceptual correction, not decoration, and removing it would
-reintroduce the bias for exactly the users who opted out of animation.
+Three stages: fade the target out behind the mask (450ms), hold the mask (400ms),
+fade the mask off the picker (450ms) — 1300ms total. Under
+`prefers-reduced-motion: reduce` the *fades* collapse to 0, leaving 400ms, but
+**the mask hold does not** — it is a perceptual correction, not decoration, and
+removing it would reintroduce the bias for exactly the users who opted out of
+animation.
+
+The target colour is dropped from the DOM at the end of stage 1, as soon as the
+mask covers it, rather than at the end of the whole transition (SPEC §9.4).
 
 ## Consequences
 
@@ -46,7 +51,9 @@ reintroduce the bias for exactly the users who opted out of animation.
   than the afterimage hurts accuracy — but note that the afterimage cost is
   invisible to playtesters (it biases scores without feeling like anything), which
   is precisely why it needs to be decided on the evidence rather than on feel.
-- Adds ~400ms of dead time per round, ~2s across a five-round game.
+- Adds ~850ms per round over a plain 450ms cross-fade, ~4s across a five-round
+  game. That is the real cost and it is not trivial; `MASK_HOLD_MS` in
+  `src/ui/swatch.ts` is the single knob.
 - The mask duration is a named constant with the rationale attached, so nobody
   "optimises" it away later without reading this.
 - Not addressed: players who look away during the memorize phase get no

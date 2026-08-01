@@ -11,13 +11,33 @@
  * finished. A tap that lands mid-dissolve is ambiguous — the player is looking at
  * a half-faded target, not at a picker — and registering it would move the guess
  * to a place nobody aimed at.
+ *
+ * The dissolve runs in three stages and passes through a neutral grey mask
+ * (ADR 0006): five seconds of fixation leaves a negative afterimage, and because
+ * the picker appears at the *same retinal location* — which is the whole point of
+ * the design — that afterimage lands on the region the player is about to judge
+ * and biases them away from the target hue. The mask lets it decay.
  */
 
 import type { Oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 
-/** SPEC §8 / ARCHITECTURE: the dissolve is 450ms, or 0 under reduced motion. */
+/** SPEC §8 / ARCHITECTURE: each cross-fade is 450ms, or 0 under reduced motion. */
 export const DISSOLVE_MS = 450;
+
+/**
+ * How long the neutral mask is held between the two cross-fades (ADR 0006).
+ *
+ * This is a perceptual correction, not decoration, so unlike the fades it is
+ * **not** collapsed under `prefers-reduced-motion` — removing it would reintroduce
+ * the afterimage bias for exactly the users who opted out of animation.
+ *
+ * Cost is ~400ms per round. If playtesting says the pause hurts the feel more
+ * than the afterimage hurts accuracy, this is the one number to change — but note
+ * the afterimage cost is invisible to playtesters, which is why ADR 0006 decides
+ * it on measurement rather than on feel.
+ */
+export const MASK_HOLD_MS = 400;
 
 function clampMin(value: number, min: number): number {
   if (!Number.isFinite(value) || value < min) return min;
@@ -77,6 +97,8 @@ export type SwatchOptions = {
   readonly reducedMotion?: boolean;
   /** Override the fade duration. Tests use 0; production uses the default. */
   readonly dissolveMs?: number;
+  /** Override the mask hold (ADR 0006). Tests use 0; production uses the default. */
+  readonly maskHoldMs?: number;
 };
 
 export type Swatch = {
@@ -91,6 +113,7 @@ type Mode = "fill" | "picker";
 
 export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Swatch {
   const configuredDuration = clampMin(options.dissolveMs ?? DISSOLVE_MS, 0);
+  const maskHold = clampMin(options.maskHoldMs ?? MASK_HOLD_MS, 0);
 
   const stack = document.createElement("div");
   stack.className = "swatch-stack";
@@ -99,12 +122,18 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
   fill.className = "swatch-fill";
   fill.style.opacity = "1";
 
+  // ADR 0006. Sits between the two layers in the same grid cell, so it covers the
+  // identical rect and the "picker covers the same shape" guarantee is untouched.
+  const mask = document.createElement("div");
+  mask.className = "swatch-mask";
+  mask.style.opacity = "0";
+
   const pickerSlot = document.createElement("div");
   pickerSlot.className = "swatch-picker-slot";
   pickerSlot.style.opacity = "0";
   pickerSlot.style.pointerEvents = "none";
 
-  stack.append(fill, pickerSlot);
+  stack.append(fill, mask, pickerSlot);
   root.append(stack);
 
   let renderedMode: Mode | null = null;
@@ -124,14 +153,37 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
     pickerSlot.style.pointerEvents = next ? "auto" : "none";
   }
 
-  function completeDissolve(): void {
-    fadeTimer = undefined;
+  /** Run `step` after `delay`, or immediately when the delay is zero. */
+  function schedule(delay: number, step: () => void): void {
+    if (delay === 0) {
+      fadeTimer = undefined;
+      step();
+      return;
+    }
+    fadeTimer = setTimeout(() => {
+      fadeTimer = undefined;
+      step();
+    }, delay);
+  }
+
+  /**
+   * Stage 3: the mask fades out over the picker, which is already at full
+   * opacity behind it. Interaction opens only once that has finished.
+   */
+  function revealPicker(fadeMs: number): void {
+    pickerSlot.style.opacity = "1";
+    mask.style.opacity = "0";
+    schedule(fadeMs, () => setInteractive(true));
+  }
+
+  /** Stage 1 complete: the target is fully hidden behind the mask. */
+  function maskCovered(fadeMs: number): void {
     // The target must not be readable from the DOM once picking is live
-    // (SPEC §9.4). Dropping the color is the last step of the fade, by which
-    // point the layer is fully transparent anyway.
+    // (SPEC §9.4). By now the fill layer is fully transparent anyway.
     setFillColor(fill, "");
     renderedFill = null;
-    setInteractive(true);
+    // Stage 2: hold the neutral mask so the afterimage decays (ADR 0006).
+    schedule(maskHold, () => revealPicker(fadeMs));
   }
 
   function update(state: GameState): void {
@@ -156,15 +208,20 @@ export function createSwatch(root: HTMLElement, options: SwatchOptions = {}): Sw
 
     stack.dataset.mode = mode;
     stack.style.setProperty("--dissolve-duration", `${duration}ms`);
-    fill.style.opacity = mode === "picker" ? "0" : "1";
-    pickerSlot.style.opacity = mode === "picker" ? "1" : "0";
 
-    if (mode !== "picker") return;
-    if (duration === 0) {
-      completeDissolve();
+    if (mode !== "picker") {
+      // Back to a fresh round: reset every layer at once.
+      fill.style.opacity = "1";
+      mask.style.opacity = "0";
+      pickerSlot.style.opacity = "0";
       return;
     }
-    fadeTimer = setTimeout(completeDissolve, duration);
+
+    // Stage 1: the target fades out behind the neutral mask.
+    fill.style.opacity = "0";
+    mask.style.opacity = "1";
+    pickerSlot.style.opacity = "0";
+    schedule(duration, () => maskCovered(duration));
   }
 
   function destroy(): void {
