@@ -16,6 +16,8 @@ The whole game lives or dies on three things:
    same rounded corners, same position. If the picker appears somewhere else, the
    player gets a spatial anchor and the memory task changes character. This is a
    hard geometric requirement, and it is asserted in e2e tests (§9.4).
+   The dissolve passes through a neutral grey mask so the afterimage from five
+   seconds of fixation doesn't bias the pick — see ADR 0006.
 2. **The scoring feels fair.** Naive RGB Euclidean distance does not match human
    perception — two blues 30 units apart look identical while two greens 30 units
    apart look obviously different. Players *will* notice and will call the game
@@ -118,15 +120,16 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
 
 ## 6. Scoring
 
-- Perceptual distance is computed in a perceptually uniform space (CIEDE2000 or
-  OKLab ΔE — final choice recorded in `docs/adr/0004-perceptual-scoring.md` once
-  research lands).
-- Distance maps to a **0–100 round score** via a monotonically decreasing curve
-  tuned so that:
-  - an exact match is 100,
-  - a "that's basically it" near-miss still scores high (rewarding),
-  - a random guess sits well below the midpoint (so a good score means something),
-  - the curve is smooth — no score cliffs.
+- Perceptual distance is **CIEDE2000** on D65 CIELAB, `kL = kC = kH = 1`
+  (ADR 0004). Note the D65 requirement: CSS `lab()` is D50 and must not be used
+  as a reference.
+- Distance maps to a 0–100 round score by
+  `100 · exp(−((max(0, ΔE00 − 1) / 16) ^ 1.3))`, which gives:
+  - a full 100 below the perceptibility threshold,
+  - ΔE 2 → 97, 5 → 85, 12 → 54, 20 → 29, 45 → 2,
+  - chance level around ΔE 11, with a random guess beating 50 only 5.4% of the time.
+- Any averaged score shown in the UI is a **median**, not a mean — the
+  random-guess distribution is heavily right-skewed and a mean misleads.
 - The reveal screen shows the raw ΔE alongside the score. Showing the underlying
   number builds trust in the scoring; hiding it invites accusations of rigging.
 - Game score = sum of round scores (max 500).
