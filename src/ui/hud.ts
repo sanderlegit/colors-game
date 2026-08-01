@@ -12,11 +12,14 @@ import {
   memorizeProgress,
   memorizeRemainingMs,
   roundNumber,
+  totalScore,
 } from "@/domain/selectors";
 import type { GameState } from "@/domain/state";
 import { ROUNDS_PER_GAME } from "@/domain/state";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+
+const MAX_GAME_SCORE = ROUNDS_PER_GAME * 100;
 
 /** Ring geometry in the SVG's own 100×100 user space. */
 const RING_RADIUS = 45;
@@ -60,6 +63,11 @@ export function createHud(root: HTMLElement, handlers: HudHandlers, options: Hud
   const roundLabel = document.createElement("p");
   roundLabel.className = "hud-round";
 
+  // The running total lives here, beside the round counter, rather than in the
+  // reveal panel — it is game-wide status, not a per-round result.
+  const total = document.createElement("p");
+  total.className = "hud-total";
+
   const countdown = document.createElement("div");
   countdown.className = "hud-countdown";
 
@@ -91,7 +99,7 @@ export function createHud(root: HTMLElement, handlers: HudHandlers, options: Hud
   confirmHint.textContent = CONFIRM_HINT;
   confirm.setAttribute("aria-describedby", confirmHint.id);
 
-  section.append(roundLabel, countdown, confirm, confirmHint);
+  section.append(roundLabel, total, countdown, confirm, confirmHint);
   root.append(section);
 
   let confirmEnabled = false;
@@ -127,10 +135,11 @@ export function createHud(root: HTMLElement, handlers: HudHandlers, options: Hud
     }
 
     const round = showRound ? `Round ${roundNumber(state)} of ${ROUNDS_PER_GAME}` : "";
+    const totalText = showRound ? `Total ${Math.round(totalScore(state))} / ${MAX_GAME_SCORE}` : "";
     const secondsLeft = memorizing ? String(Math.ceil(memorizeRemainingMs(state) / 1000)) : "";
     const enabled = isConfirmEnabled(state);
 
-    const key = `${round}|${secondsLeft}|${reduced ? "r" : ""}|${picking ? "p" : ""}|${
+    const key = `${round}|${totalText}|${secondsLeft}|${reduced ? "r" : ""}|${picking ? "p" : ""}|${
       memorizing ? "m" : ""
     }|${enabled ? "1" : "0"}`;
     if (key === renderedKey) return;
@@ -138,6 +147,9 @@ export function createHud(root: HTMLElement, handlers: HudHandlers, options: Hud
 
     roundLabel.textContent = round;
     roundLabel.hidden = !showRound;
+
+    total.textContent = totalText;
+    total.hidden = !showRound;
 
     countdown.hidden = !memorizing;
     seconds.textContent = secondsLeft;

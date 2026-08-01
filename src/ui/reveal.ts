@@ -21,12 +21,10 @@
 
 import { oklchToCss } from "@/color/format";
 import type { Oklch } from "@/color/types";
-import { isFinalRound, totalScore } from "@/domain/selectors";
+import { isFinalRound } from "@/domain/selectors";
 import type { GameState, RoundResult } from "@/domain/state";
-import { ROUNDS_PER_GAME } from "@/domain/state";
 import { setFillColor } from "@/ui/swatch";
 
-const MAX_GAME_SCORE = ROUNDS_PER_GAME * 100;
 const EMPTY = "—";
 
 export type RevealHandlers = {
@@ -149,7 +147,6 @@ export function createReveal(
   stats.className = "reveal-stats";
   const deltaValue = addStat(stats, "ΔE", "reveal-delta");
   const scoreValue = addStat(stats, "Round score", "reveal-score");
-  const totalValue = addStat(stats, "Total", "reveal-total");
 
   const compare = document.createElement("dl");
   compare.className = "reveal-compare";
@@ -201,10 +198,9 @@ export function createReveal(
     const targetCss = revealed ? oklchToCss(state.target) : "";
     const delta = result === undefined ? EMPTY : result.deltaE.toFixed(3);
     const score = result === undefined ? EMPTY : String(Math.round(result.score));
-    const total = revealed ? `${Math.round(totalScore(state))} of ${MAX_GAME_SCORE}` : EMPTY;
     const nextLabel = isFinalRound(state) ? "See summary" : "Next round";
 
-    const key = `${state.phase}|${guessCss}|${targetCss}|${delta}|${score}|${total}|${nextLabel}`;
+    const key = `${state.phase}|${guessCss}|${targetCss}|${delta}|${score}|${nextLabel}`;
     if (key === renderedKey) return;
     renderedKey = key;
 
@@ -229,7 +225,6 @@ export function createReveal(
     hueRow.target.textContent = target?.h ?? EMPTY;
     deltaValue.textContent = delta;
     scoreValue.textContent = score;
-    totalValue.textContent = total;
     next.textContent = nextLabel;
   }
 

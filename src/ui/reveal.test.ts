@@ -139,22 +139,6 @@ describe("createReveal", () => {
     expect(text(root, ".reveal-score")).toBe("81");
   });
 
-  it("shows the running total across rounds", () => {
-    const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
-    reveal.update(
-      revealed(
-        [
-          { deltaE: 2, score: 90 },
-          { deltaE: 8, score: 55 },
-        ],
-        1,
-      ),
-    );
-
-    expect(text(root, ".reveal-total")).toBe("145 of 500");
-  });
-
   it("labels the exit by where it leads", () => {
     const root = mount();
     const reveal = createReveal(root, { onNext: () => {} });

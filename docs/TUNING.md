@@ -82,20 +82,22 @@ panel's reserved slots. These are CSS, not TypeScript constants:
 |------|-------|----:|-------|
 | `--color-target` | `:root` (+ dark override) | `#e5484d` / `#ff6369` | The reticle red and the tint on the "Target" readout column. Change both or the two drift apart. |
 | `.picker-target` size | `.picker-target` | 26px | The plane reticle. Deliberately larger than the 22px `.picker-cursor` so it frames the guess when they coincide. |
-| `.reveal-chip` height (phone) | `@media (max-width: 639px)` | 4rem | The phone comparison-blob height. Taller reads better; it trades off against the picker's height, since the picker takes whatever vertical space is left. |
-| `.game` padding (phone) | `@media (max-width: 639px)` | `--space-2` | Tightened from `--space-3` to buy the last few pixels of vertical fit. |
+| `.reveal-chip` height (phone) | `@media (max-width: 639px)` | 4rem | The phone comparison-blob height. Taller reads better; it trades off against the picker square, which takes whatever vertical space is left. |
+| `.game` padding (phone) | `@media (max-width: 639px)` | `--space-1` | Tightened from `--space-3` to buy vertical fit. |
+| HUD row (phone) | `.game` `grid-template-rows` middle track | `3rem` | The status row is a **fixed** height so it is identical in every phase — a pixel of drift would move the picker and break the memorize↔picking geometry. |
 
 The panel is inline in the side region — result elements are laid out in every
 phase and only their `visibility` flips on reveal, which is what keeps the reveal
 from shifting anything (ADR 0010). At phone widths the layout reorders to
-`side → hud → stage` (`grid-template-rows: auto auto 1fr`), putting the picker at
-the bottom (thumb zone) with the confirm button right above it. There the swatch
-drops its 1:1 aspect ratio and fills the stage cell — **full width**, remaining
-height — so the plane and lightness bar span the screen; the fill and picker
-share that element, so the dissolve still lands on the same rect. The ΔE prose is
-`display: none` so it all fits. If you retune the phone blob height or padding,
-re-check the "swatch and side panel both on screen without scrolling" e2e at the
-iPhone 14 viewport.
+`side → hud → stage` (`grid-template-rows: auto 3rem 1fr`): a compact single-line
+status row (round counter + running total, from the HUD, `flex-wrap: nowrap`;
+the ΔE prose and the Confirm hint are dropped for space), then the picker at the
+bottom (thumb zone). The picker is the largest **square** that fits the stage
+cell — `.swatch-stack { width: 100cqmin; aspect-ratio: 1 }` against a
+`container-type: size` stage — so it is limited by the cell's smaller dimension
+and stays 1:1. If you retune the phone blob height, padding or HUD row, re-check
+the two mobile geometry e2e tests (no-scroll, and swatch rect stable across
+phases) at the iPhone 14 viewport.
 
 ## Things that are not knobs
 

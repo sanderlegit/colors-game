@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GameState } from "@/domain/state";
+import { oklch } from "@/color/types";
+import type { GameState, RoundResult } from "@/domain/state";
 import { initialState } from "@/domain/state";
 import { createHud } from "@/ui/hud";
+
+const GREY = oklch(0.5, 0, 0);
+function scored(...scores: number[]): readonly RoundResult[] {
+  return scores.map((score) => ({ deltaE: 0, score, target: GREY, guess: GREY }));
+}
 
 function stateWith(patch: Partial<GameState>): GameState {
   return { ...initialState(), ...patch };
@@ -108,6 +114,18 @@ describe("createHud", () => {
 
     hud.update(stateWith({ phase: "idle" }));
     expect(label.hidden).toBe(true);
+  });
+
+  it("shows the running total beside the round counter", () => {
+    const root = mount();
+    const hud = createHud(root, { onConfirm: () => {} });
+    const total = must(root.querySelector<HTMLElement>(".hud-total"));
+
+    hud.update(stateWith({ phase: "reveal", roundIndex: 1, results: scored(90, 55) }));
+    expect(total.textContent).toBe("Total 145 / 500");
+
+    hud.update(stateWith({ phase: "idle" }));
+    expect(total.hidden).toBe(true);
   });
 
   it("keeps Confirm disabled until the picker has moved", () => {
