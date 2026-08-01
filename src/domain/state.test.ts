@@ -264,7 +264,9 @@ describe("CONFIRM", () => {
     const moved = reduce(picking, { type: "PICK", value: A_COLOR });
     const state = reduce(moved, { type: "CONFIRM" });
     expect(state.phase).toBe("reveal");
-    expect(state.results).toEqual([score(moved.target, A_COLOR)]);
+    expect(state.results).toEqual([
+      { ...score(moved.target, A_COLOR), target: moved.target, guess: A_COLOR },
+    ]);
     expect(state.phaseStartedAt).toBe(moved.now);
   });
 
@@ -400,7 +402,10 @@ describe("the reducer is total (SPEC §9.2)", () => {
     hasMoved: fc.boolean(),
     phaseStartedAt: finiteArb,
     now: finiteArb,
-    results: fc.array(fc.record({ deltaE: finiteArb, score: finiteArb }), { maxLength: 8 }),
+    results: fc.array(
+      fc.record({ deltaE: finiteArb, score: finiteArb, target: oklchArb, guess: oklchArb }),
+      { maxLength: 8 },
+    ),
     settings: fc.record({ memorizeMs: finiteArb, reducedMotion: fc.boolean() }),
   });
 

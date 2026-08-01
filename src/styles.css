@@ -30,6 +30,21 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", roboto, helvetica, arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", monospace;
 
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-border: #d4d4d8;
+
+  /* The dissolve (SPEC §2.1). JS overrides this per-element and collapses it to
+     0ms under reduced motion; the value here is only the default. */
+  --dissolve-duration: 450ms;
+
+  /* SPEC §4: the swatch never grows enough to push the preview or the confirm
+     button below the fold, iOS URL bar included. */
+  --swatch-size: min(70vw, 50vh);
+
+  /* SPEC §8: the smallest thing a finger is asked to hit. */
+  --tap-target: 44px;
+
   /* iOS notch / home-indicator insets (requires viewport-fit=cover in index.html). */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -44,6 +59,8 @@
     --color-bg: #0b0b0f;
     --color-fg: #ececf1;
     --color-muted: #9ca3af;
+    --color-surface: #17171d;
+    --color-border: #33333d;
   }
 }
 
@@ -139,4 +156,389 @@ p {
   padding-right: var(--safe-right);
   padding-bottom: var(--safe-bottom);
   padding-left: var(--safe-left);
+}
+
+/* ---------------------------------------------------------------------------
+   Layout (SPEC §4)
+
+   Markup contract with src/ui/render.ts — components mount *into* these regions
+   and never create them:
+
+     #app
+       .game
+         .game-hud     ← createHud(root, …)
+         .game-stage   ← createSwatch(root, …)     (picker mounts into its slot)
+         .game-side    ← createPreview(root, …)
+         .game-result  ← createReveal(root, …)
+         .game-menu    ← createMenu(root, …)       (overlays everything when
+                                                    idle or at the summary)
+
+   Both the swatch and the preview are on screen at every viewport size without a
+   scroll. That is a constraint, not an aspiration: it is asserted in e2e at
+   iPhone 14 size.
+   --------------------------------------------------------------------------- */
+.game {
+  display: grid;
+  min-height: 100dvh;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  align-content: center;
+  justify-items: center;
+  grid-template-areas:
+    "hud"
+    "stage"
+    "side"
+    "result";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.game-hud {
+  grid-area: hud;
+}
+
+.game-stage {
+  grid-area: stage;
+}
+
+.game-side {
+  grid-area: side;
+  width: 100%;
+  /* SPEC §4: the preview keeps a real presence when stacked, not a sliver. */
+  min-height: 20vh;
+}
+
+.game-result {
+  grid-area: result;
+  width: 100%;
+}
+
+/* SPEC §4: at 640px and up the preview sits to the right of the swatch. */
+@media (min-width: 640px) {
+  .game {
+    grid-template-columns: auto minmax(15rem, 22rem);
+    grid-template-areas:
+      "hud    hud"
+      "stage  side"
+      "result result";
+    justify-items: stretch;
+    align-items: center;
+  }
+
+  .game-side {
+    min-height: 0;
+  }
+}
+
+/* --- Idle and summary screens (SPEC §3) ----------------------------------- */
+
+/* An overlay rather than another grid row: it covers the board so a stray tap on
+   the picker can't register before the round has started, and so the summary
+   isn't competing for space with a stage it no longer needs. */
+/* The wrapper is transparent to layout — `.menu` itself does the covering, so the
+   grid isn't given a phantom row when the menu is hidden. */
+.game-menu {
+  display: contents;
+}
+
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--space-4) + var(--safe-top)) var(--space-3)
+    calc(var(--space-4) + var(--safe-bottom));
+  overflow-y: auto;
+  background: var(--color-bg);
+  text-align: center;
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+.menu-title {
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.menu-blurb,
+.menu-best {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.menu-breakdown {
+  display: grid;
+  gap: var(--space-2);
+  width: min(100%, 26rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-round {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  text-align: left;
+}
+
+/* Target and guess sit side by side so the breakdown shows *why* a round scored
+   what it did, not just the number. */
+.menu-round-chip {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--fill-color, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.menu-round-score {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- The shared rect (SPEC §2.1, ARCHITECTURE § "The dissolve") ----------- */
+
+/* Both layers occupy grid cell 1/1 of this element. Neither has a size of its
+   own, so the picker cannot land anywhere but exactly on top of the swatch —
+   there are no coordinates to keep in sync. Do not give either child a width,
+   height, position or margin. */
+.swatch-stack {
+  display: grid;
+  grid-template-areas: "cell";
+  width: var(--swatch-size);
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.swatch-fill,
+.swatch-picker-slot {
+  grid-area: cell;
+  border-radius: inherit;
+  transition: opacity var(--dissolve-duration) var(--ease-out);
+}
+
+.swatch-fill {
+  background: var(--fill-color, transparent);
+}
+
+/* The only element in the swatch that owns a gesture, so the only one that may
+   take `touch-action` away from the page. */
+.swatch-picker-slot {
+  touch-action: none;
+}
+
+/* --- Preview + readout (SPEC §4, §8) ------------------------------------- */
+.preview {
+  display: grid;
+  grid-template-rows: minmax(6rem, 1fr) auto;
+  gap: var(--space-2);
+  width: 100%;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+/* SPEC §3: during memorize there is no guess, so the panel reads as empty. */
+.preview.is-dim {
+  opacity: 0.45;
+}
+
+.preview-fill {
+  min-height: 6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--fill-color, transparent);
+}
+
+/* SPEC §8: the numeric readout is an accessibility requirement. It is always
+   rendered and must never be hidden behind a debug flag. */
+.preview-readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: var(--space-1) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.preview-row dt {
+  color: var(--color-muted);
+}
+
+.preview-value {
+  font-weight: 600;
+}
+
+/* --- HUD (SPEC §3, §5.4, §8) --------------------------------------------- */
+.hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+}
+
+.hud-round {
+  font-weight: 600;
+}
+
+.hud-countdown {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-ring {
+  width: var(--tap-target);
+  height: var(--tap-target);
+  /* Start the sweep at 12 o'clock. */
+  transform: rotate(-90deg);
+}
+
+.hud-ring-track,
+.hud-ring-progress {
+  fill: none;
+  stroke-width: 8;
+}
+
+.hud-ring-track {
+  stroke: var(--color-border);
+}
+
+.hud-ring-progress {
+  stroke: var(--color-accent);
+  stroke-linecap: round;
+}
+
+/* The numeric countdown is the accessible one and stays in every case. */
+.hud-seconds {
+  min-width: 1.5ch;
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-confirm,
+.reveal-next {
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background-color: var(--color-accent);
+  color: #ffffff;
+  font-weight: 600;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+/* SPEC §8: never color alone. Disabled changes the border from solid to dashed
+   and is spelled out by `.hud-confirm-hint` next to it. */
+.hud-confirm:disabled {
+  border-style: dashed;
+  border-color: var(--color-muted);
+  background-color: transparent;
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+.hud-confirm-hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+/* --- Reveal (SPEC §6) ---------------------------------------------------- */
+.reveal {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.reveal[hidden] {
+  display: none;
+}
+
+.reveal-pair {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.reveal-item {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: center;
+  font-size: 0.875rem;
+}
+
+.reveal-chip {
+  width: min(30vw, 8rem);
+  aspect-ratio: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--fill-color, transparent);
+}
+
+/* SPEC §6: the raw ΔE sits beside the score on purpose — hiding the input to the
+   scoring curve is what makes a scoring system look rigged. */
+.reveal-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.reveal-stat {
+  display: grid;
+  justify-items: center;
+}
+
+.reveal-stat dt {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.reveal-stat dd {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* --- Reduced motion (SPEC §8) -------------------------------------------- */
+/* `!important` is load-bearing here — it has to beat the inline
+   `--dissolve-duration` the swatch writes. Biome's complexity/noImportantStyles
+   is disabled repo-wide for exactly this block. */
+@media (prefers-reduced-motion: reduce) {
+  .swatch-fill,
+  .swatch-picker-slot,
+  .preview,
+  .hud-confirm,
+  .reveal-next {
+    transition-duration: 0ms !important;
+  }
+
+  /* The ring is the animation; the numeric countdown carries the information. */
+  .hud-ring {
+    display: none !important;
+  }
 }

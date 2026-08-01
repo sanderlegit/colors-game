@@ -100,7 +100,12 @@ describe("memorizeProgress", () => {
 
 describe("totalScore", () => {
   const results = (...scores: number[]): readonly RoundResult[] =>
-    scores.map((score) => ({ deltaE: 1, score }));
+    scores.map((score) => ({
+      deltaE: 1,
+      score,
+      target: oklch(0.5, 0.1, 30),
+      guess: oklch(0.5, 0.1, 30),
+    }));
 
   it("is zero with no rounds played", () => {
     expect(totalScore(initialState())).toBe(0);

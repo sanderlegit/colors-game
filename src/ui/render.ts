@@ -1,0 +1,116 @@
+/**
+ * Assembles the components into the markup contract documented in styles.css and
+ * routes their callbacks into game events.
+ *
+ * Data flows one way: DOM event → `Event` → reducer → new state → `update`. No
+ * component reads another component, and none of them holds game state of its
+ * own. That is what keeps a frameworkless render loop tractable.
+ *
+ * The picker arrives as a factory rather than an import. It is the one component
+ * that needs a canvas and a real layout box, so injecting it keeps this module
+ * mountable in happy-dom and lets the picker be swapped without touching
+ * composition.
+ */
+
+import type { Oklch } from "@/color/types";
+import type { Event, GameState } from "@/domain/state";
+import { createHud } from "@/ui/hud";
+import { createMenu } from "@/ui/menu";
+import { createPreview } from "@/ui/preview";
+import { createReveal } from "@/ui/reveal";
+import { createSwatch } from "@/ui/swatch";
+
+export type PickerHandlers = {
+  readonly onPick: (value: Oklch) => void;
+};
+
+export type Picker = {
+  update(state: GameState): void;
+  destroy(): void;
+};
+
+export type PickerFactory = (slot: HTMLElement, handlers: PickerHandlers) => Picker;
+
+export type GameViewDeps = {
+  readonly dispatch: (event: Event) => void;
+  readonly createPicker: PickerFactory;
+  readonly nextSeed: () => number;
+  readonly reducedMotion?: boolean;
+  readonly formatHex?: (color: Oklch) => string;
+  readonly bestScore?: number;
+};
+
+export type GameView = {
+  readonly element: HTMLElement;
+  update(state: GameState): void;
+  setBestScore(score: number): void;
+  destroy(): void;
+};
+
+function region(parent: HTMLElement, className: string): HTMLElement {
+  const element = document.createElement("div");
+  element.className = className;
+  parent.append(element);
+  return element;
+}
+
+export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView {
+  const reducedMotion = deps.reducedMotion ?? false;
+
+  const game = document.createElement("div");
+  game.className = "game";
+
+  const hudRegion = region(game, "game-hud");
+  const stageRegion = region(game, "game-stage");
+  const sideRegion = region(game, "game-side");
+  const resultRegion = region(game, "game-result");
+  const menuRegion = region(game, "game-menu");
+
+  root.append(game);
+
+  const hud = createHud(
+    hudRegion,
+    { onConfirm: () => deps.dispatch({ type: "CONFIRM" }) },
+    {
+      reducedMotion,
+    },
+  );
+  const swatch = createSwatch(stageRegion, { reducedMotion });
+  const picker = deps.createPicker(swatch.pickerSlot, {
+    onPick: (value) => deps.dispatch({ type: "PICK", value }),
+  });
+
+  // `exactOptionalPropertyTypes` is on, so an absent formatter must be omitted
+  // rather than passed as undefined.
+  const preview = createPreview(
+    sideRegion,
+    deps.formatHex === undefined ? {} : { formatHex: deps.formatHex },
+  );
+  const reveal = createReveal(resultRegion, { onNext: () => deps.dispatch({ type: "NEXT" }) });
+
+  // `at` is the last timestamp the reducer saw, so a game started between frames
+  // still begins its memorize window from a clock the reducer agrees with.
+  let now = 0;
+  const menu = createMenu(
+    menuRegion,
+    {
+      onStart: () => deps.dispatch({ type: "START", seed: deps.nextSeed(), at: now }),
+      onRestart: () => deps.dispatch({ type: "RESTART", seed: deps.nextSeed(), at: now }),
+    },
+    deps.bestScore === undefined ? {} : { bestScore: deps.bestScore },
+  );
+
+  const parts = [hud, swatch, picker, preview, reveal, menu];
+
+  function update(state: GameState): void {
+    now = state.now;
+    for (const part of parts) part.update(state);
+  }
+
+  function destroy(): void {
+    for (const part of parts) part.destroy();
+    game.remove();
+  }
+
+  return { element: game, update, setBestScore: menu.setBestScore, destroy };
+}

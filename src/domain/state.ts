@@ -37,11 +37,22 @@ export const ROUNDS_PER_GAME = 5;
 export type Phase = "idle" | "memorize" | "picking" | "reveal" | "summary";
 
 /**
- * Mirrors `RoundResult` in `src/domain/scoring.ts`. It is declared here as well
- * so the state machine carries no import from the scoring module; the two are
- * structurally identical and interchangeable.
+ * What the scorer returns: the perceptual distance and the points it earned.
+ * Mirrors the type in `src/domain/scoring.ts` so the state machine carries no
+ * import from the scoring module; the two are structurally interchangeable.
  */
-export type RoundResult = { readonly deltaE: number; readonly score: number };
+export type Score = { readonly deltaE: number; readonly score: number };
+
+/**
+ * A recorded round. It carries the colors as well as the score because the
+ * summary screen has to redisplay every round, and `state.target` only ever
+ * holds the *current* round — without these, a five-round breakdown would show
+ * the last target five times.
+ */
+export type RoundResult = Score & {
+  readonly target: Oklch;
+  readonly guess: Oklch;
+};
 
 export type Settings = {
   readonly memorizeMs: number;
@@ -72,7 +83,7 @@ export type Event =
   | { readonly type: "RESTART"; readonly seed: number; readonly at: number };
 
 /** Injected from `src/domain/scoring.ts`. */
-export type ScoreFn = (target: Oklch, guess: Oklch) => RoundResult;
+export type ScoreFn = (target: Oklch, guess: Oklch) => Score;
 
 /** Injected from `src/domain/round.ts`. Pure in `(seed, roundIndex)` per SPEC §5.1. */
 export type TargetFn = (seed: number, roundIndex: number) => Oklch;
@@ -187,7 +198,10 @@ export function createReducer(deps: ReducerDeps): Reducer {
           ...state,
           phase: "reveal",
           phaseStartedAt: state.now,
-          results: [...state.results, deps.score(state.target, state.guess)],
+          results: [
+            ...state.results,
+            { ...deps.score(state.target, state.guess), target: state.target, guess: state.guess },
+          ],
         };
 
       case "NEXT": {
