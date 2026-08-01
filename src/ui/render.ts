@@ -86,7 +86,11 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
     sideRegion,
     deps.formatHex === undefined ? {} : { formatHex: deps.formatHex },
   );
-  const reveal = createReveal(resultRegion, { onNext: () => deps.dispatch({ type: "NEXT" }) });
+  const reveal = createReveal(
+    resultRegion,
+    { onNext: () => deps.dispatch({ type: "NEXT" }) },
+    deps.formatHex === undefined ? {} : { formatHex: deps.formatHex },
+  );
 
   // SPEC §8: Enter confirms. The picker owns the arrow keys, but confirming from
   // it would mean handing it a second responsibility, so the binding lives here.

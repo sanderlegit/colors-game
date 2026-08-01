@@ -67,6 +67,40 @@ describe("createReveal", () => {
     expect(must(root.querySelector<HTMLElement>(".reveal")).hidden).toBe(false);
   });
 
+  it("shows your coordinates against the target's", () => {
+    const root = mount();
+    const reveal = createReveal(root, { onNext: () => {} });
+    reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
+
+    const you = [...root.querySelectorAll<HTMLElement>(".reveal-compare-you")].map(
+      (n) => n.textContent,
+    );
+    const target = [...root.querySelectorAll<HTMLElement>(".reveal-compare-target")].map(
+      (n) => n.textContent,
+    );
+
+    // Rows are hex, L, C, h. Hex is "—" here because no formatter was injected.
+    expect(you).toEqual(["—", "0.550", "0.110", "195.0°"]);
+    expect(target).toEqual(["—", "0.600", "0.150", "210.0°"]);
+  });
+
+  it("shows a hex approximation when a formatter is injected", () => {
+    const root = mount();
+    const reveal = createReveal(root, { onNext: () => {} }, { formatHex: () => "#abcdef" });
+    reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
+
+    const hex = must(root.querySelector<HTMLElement>(".reveal-compare-you"));
+    expect(hex.textContent).toBe("#abcdef");
+  });
+
+  it("explains what ΔE means", () => {
+    const root = mount();
+    const reveal = createReveal(root, { onNext: () => {} });
+    reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
+
+    expect(text(root, ".reveal-explain")).toContain("ΔE");
+  });
+
   it("shows the raw ΔE alongside the score", () => {
     const root = mount();
     const reveal = createReveal(root, { onNext: () => {} });
