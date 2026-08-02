@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { srgbToLab } from "@/color/convert";
-import { ciede2000, deltaEOk } from "@/color/deltaE";
+import { ciede2000, ciede2000Components, deltaEOk } from "@/color/deltaE";
 import { parseHex } from "@/color/format";
 import { lab, oklab } from "@/color/types";
 import { SHARMA_CIEDE2000, SRGB_TO_LAB_D65 } from "@/color/vectors.fixture";
@@ -101,6 +101,52 @@ describe("ciede2000 — properties", () => {
         expect(d).toBeGreaterThanOrEqual(0);
       }),
     );
+  });
+});
+
+describe("ciede2000Components", () => {
+  it("attributes a pure L* difference entirely to lightness", () => {
+    const c = ciede2000Components(lab(50, 20, -10), lab(60, 20, -10));
+    expect(c.chroma).toBeCloseTo(0, 12);
+    expect(c.hue).toBeCloseTo(0, 12);
+    expect(c.lightness).toBeGreaterThan(0);
+    // With chroma and hue exactly matched, R_T vanishes and the lightness term is
+    // the whole distance.
+    expect(c.lightness).toBeCloseTo(ciede2000(lab(50, 20, -10), lab(60, 20, -10)), 12);
+  });
+
+  it("is zero on every axis for a colour against itself", () => {
+    const c = ciede2000Components(lab(42, 12, -33), lab(42, 12, -33));
+    expect(c).toEqual({ lightness: 0, chroma: 0, hue: 0 });
+  });
+
+  it("recombines to the full ΔE00 for a same-hue pair", () => {
+    // Two colours on one hue ray differ only in lightness and chroma, so ΔH' = 0
+    // and with it the R_T cross-term: the quadrature of the axes is then exactly
+    // the metric. (For a general pair R_T bites near blue and the identity holds
+    // only up to that term — the point of dropping it from the attribution.)
+    const arb = fc.record({
+      angle: fc.double({ min: 0, max: 2 * Math.PI, noNaN: true }),
+      L1: fc.double({ min: 0, max: 100, noNaN: true }),
+      L2: fc.double({ min: 0, max: 100, noNaN: true }),
+      r1: fc.double({ min: 0, max: 120, noNaN: true }),
+      r2: fc.double({ min: 0, max: 120, noNaN: true }),
+    });
+    fc.assert(
+      fc.property(arb, ({ angle, L1, L2, r1, r2 }) => {
+        const p = lab(L1, r1 * Math.cos(angle), r1 * Math.sin(angle));
+        const q = lab(L2, r2 * Math.cos(angle), r2 * Math.sin(angle));
+        const c = ciede2000Components(p, q);
+        expect(c.hue).toBeCloseTo(0, 9);
+        expect(Math.hypot(c.lightness, c.chroma, c.hue)).toBeCloseTo(ciede2000(p, q), 9);
+      }),
+    );
+  });
+
+  it("is symmetric in its arguments", () => {
+    const p = lab(60, 15, 30);
+    const q = lab(48, -22, 5);
+    expect(ciede2000Components(p, q)).toEqual(ciede2000Components(q, p));
   });
 });
 

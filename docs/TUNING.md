@@ -76,11 +76,15 @@ Wiring it needs a field on `Settings` and a control in the menu — see
 
 `src/ui/picker.ts` · [ADR 0007](adr/0007-picker-shows-every-hue.md)
 
+The three nudges are sized for **equal ΔE00 per keypress** (~0.2–0.25 at a
+mid-plane reference), not equal screen travel, so a keyboard correction costs the
+same on every axis. Only chroma was out of line — measured, not eyeballed.
+
 | Constant | Now | Notes |
 |----------|----:|-------|
-| `HUE_NUDGE_DEG` | 0.5 | Hue is the plane's x axis. Sub-pixel at both phone and desktop widths. |
-| `CHROMA_FRACTION_NUDGE` | 0.0025 | Plane y axis, ≈1/400 of the axis. |
-| `LIGHTNESS_NUDGE` | 0.0025 | The bar. ~1.1px at a 450px-wide bar — marginally coarser than a pixel, kept deliberately because lightness is the least ΔE-sensitive axis. |
+| `HUE_NUDGE_DEG` | 0.5 | Hue is the plane's x axis. Sub-pixel at both phone and desktop widths; ~0.2–0.25 ΔE00/press. |
+| `CHROMA_FRACTION_NUDGE` | 0.01 | Plane y axis. Was 0.0025 (an even 1/400 of the axis) — but that moved only ~0.06 ΔE00, ~4× finer than the other two arrows, so chroma took ~4× the keystrokes for the same perceptual gain. 0.01 matches them (~0.22 ΔE00) and is still sub-two-pixel. |
+| `LIGHTNESS_NUDGE` | 0.0025 | The bar. ~1.1px at a 450px bar, ~0.25 ΔE00/press — already matched to the hue arrow. Note: per unit of its own 0..1 control, lightness is the **most** ΔE-sensitive axis, not the least. |
 | `COARSE_MULTIPLIER` | 10 | **Shift makes steps coarser, never finer.** |
 | `DRAFT_SAMPLES` / `FINAL_SAMPLES` | 24k / 120k | Draft lattice during a lightness drag, refined 120ms after it settles. This is the repaint-budget trade — see `BACKLOG.md`. |
 

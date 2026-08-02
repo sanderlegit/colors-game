@@ -42,7 +42,7 @@ src/
   color/
     types.ts          Srgb, LinearRgb, Xyz, Lab, Oklab, Oklch — branded/nominal
     convert.ts        the conversion chain, one function per hop
-    deltaE.ts         ciede2000(), deltaEOk()
+    deltaE.ts         ciede2000(), ciede2000Components(), deltaEOk()
     gamut.ts          isInGamut(), clipChromaToGamut()
     format.ts         hex parse/format, css color string
     *.test.ts

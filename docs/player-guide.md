@@ -43,6 +43,13 @@ It also cares about *which kind* of mistake you made. Getting the hue wrong is
 usually more noticeable than getting the brightness slightly wrong, and the number
 reflects that.
 
+After each round the score screen splits your ΔE into three — **L** (lightness),
+**C** (chroma/saturation) and **h** (hue) — and highlights the one that cost you
+most. It is worth a look: the picker plane only shows hue and saturation, so
+brightness is easy to neglect, and a guess that looks right on the plane can still
+lose the round on lightness alone. The highlighted axis tells you where to aim
+next time.
+
 ## Turning ΔE into a score
 
 Three things the scoring curve is built to do:

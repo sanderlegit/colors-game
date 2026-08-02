@@ -19,6 +19,8 @@
  * was computed from is what makes a scoring system look rigged.
  */
 
+import { oklchToLab } from "@/color/convert";
+import { ciede2000Components } from "@/color/deltaE";
 import { oklchToCss } from "@/color/format";
 import type { Oklch } from "@/color/types";
 import { isFinalRound } from "@/domain/selectors";
@@ -26,6 +28,11 @@ import type { GameState, RoundResult } from "@/domain/state";
 import { setFillColor } from "@/ui/swatch";
 
 const EMPTY = "—";
+
+/** The axes of the ΔE breakdown, in the order the row shows them. */
+const BREAKDOWN_AXES = ["lightness", "chroma", "hue"] as const;
+type BreakdownAxis = (typeof BREAKDOWN_AXES)[number];
+const AXIS_LABEL: Record<BreakdownAxis, string> = { lightness: "L", chroma: "C", hue: "h" };
 
 export type RevealHandlers = {
   readonly onNext: () => void;
@@ -80,6 +87,27 @@ function addStat(list: HTMLElement, label: string, className: string): HTMLEleme
   row.append(term, value);
   list.append(row);
   return value;
+}
+
+/** One axis of the ΔE breakdown: its container (for the dominant flag) and value. */
+type BreakdownCell = { readonly axis: HTMLElement; readonly value: HTMLElement };
+
+function addBreakdownCell(row: HTMLElement, axis: BreakdownAxis): BreakdownCell {
+  const cell = document.createElement("div");
+  cell.className = "reveal-breakdown-axis";
+  cell.dataset.axis = axis;
+
+  const label = document.createElement("span");
+  label.className = "reveal-breakdown-label";
+  label.textContent = AXIS_LABEL[axis];
+
+  const value = document.createElement("span");
+  value.className = "reveal-breakdown-value";
+  value.textContent = EMPTY;
+
+  cell.append(label, value);
+  row.append(cell);
+  return { axis: cell, value };
 }
 
 /** Your value and the target's, on one labelled row. */
@@ -148,6 +176,19 @@ export function createReveal(
   const deltaValue = addStat(stats, "ΔE", "reveal-delta");
   const scoreValue = addStat(stats, "Round score", "reveal-score");
 
+  // Where the ΔE came from, per axis. The plane shows hue and chroma but not
+  // lightness (it lives on the bar), so a guess can sit right on the target
+  // reticle and still score poorly on lightness alone; naming the dominant axis
+  // is what turns a surprising score into a legible one.
+  const breakdown = document.createElement("div");
+  breakdown.className = "reveal-breakdown";
+  breakdown.setAttribute("aria-label", "Where the ΔE came from, by axis");
+  const breakdownCells: Record<BreakdownAxis, BreakdownCell> = {
+    lightness: addBreakdownCell(breakdown, "lightness"),
+    chroma: addBreakdownCell(breakdown, "chroma"),
+    hue: addBreakdownCell(breakdown, "hue"),
+  };
+
   const compare = document.createElement("dl");
   compare.className = "reveal-compare";
   const head = document.createElement("div");
@@ -170,14 +211,15 @@ export function createReveal(
   explain.className = "reveal-explain";
   explain.textContent =
     "ΔE is the perceived gap between your colour and the target — lower is better. " +
-    "The red reticle marks where the target sat; the score falls as the gap grows.";
+    "The breakdown shows which axis cost you most: lightness lives on the bar, not " +
+    "the plane, so a reticle that looks spot-on can still lose the round on L alone.";
 
   const next = document.createElement("button");
   next.type = "button";
   next.className = "reveal-next";
   next.textContent = "Next round";
 
-  section.append(pair, stats, compare, explain, next);
+  section.append(pair, stats, breakdown, compare, explain, next);
   root.append(section);
 
   function onClick(): void {
@@ -225,6 +267,27 @@ export function createReveal(
     hueRow.target.textContent = target?.h ?? EMPTY;
     deltaValue.textContent = delta;
     scoreValue.textContent = score;
+
+    // The breakdown is derived from the two colours (already in `key`), not from
+    // the scored number, so it never touches the scoring path.
+    if (revealed) {
+      const parts = ciede2000Components(oklchToLab(state.target), oklchToLab(state.guess));
+      let dominant: BreakdownAxis = "lightness";
+      for (const axis of BREAKDOWN_AXES) {
+        breakdownCells[axis].value.textContent = parts[axis].toFixed(1);
+        if (parts[axis] > parts[dominant]) dominant = axis;
+      }
+      const hasError = parts[dominant] > 0;
+      for (const axis of BREAKDOWN_AXES) {
+        breakdownCells[axis].axis.classList.toggle("is-dominant", hasError && axis === dominant);
+      }
+    } else {
+      for (const axis of BREAKDOWN_AXES) {
+        breakdownCells[axis].value.textContent = EMPTY;
+        breakdownCells[axis].axis.classList.remove("is-dominant");
+      }
+    }
+
     next.textContent = nextLabel;
   }
 
