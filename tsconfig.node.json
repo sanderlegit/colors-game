@@ -23,6 +23,9 @@
     "vite.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
-    "tests/**/*.node.test.ts"
+    "playwright.backend.config.ts",
+    "e2e/ports.ts",
+    "tests/**/*.node.test.ts",
+    "tests/**/*.node.ts"
   ]
 }

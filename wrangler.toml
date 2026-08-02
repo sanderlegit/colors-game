@@ -1,0 +1,99 @@
+name = "colors-game"
+compatibility_date = "2026-08-01"
+
+# A Worker with static assets, not a Pages project (ADR 0022). `main` is the
+# entry point; `[assets]` is the static half that used to be the whole project.
+main = "server/index.ts"
+
+# No `colors-game.workers.dev`. A second hostname is a second *site* here — the
+# identity cookie is host-only and the CSRF guard compares against the request's
+# own URL — which is the problem ADR 0021 exists to solve. On Pages the free
+# subdomain could not be switched off; on Workers it can, so this switches it off.
+workers_dev = false
+
+# The one hostname this Worker answers on. `custom_domain = true` makes
+# `wrangler deploy` create both the DNS record and the certificate — there is no
+# dashboard step, and the hostname is visible in a diff rather than in someone's
+# browser history. Combined with `workers_dev = false` above, this is the
+# *complete* list of ways to reach the site.
+#
+# The zone must be on Cloudflare nameservers for this to work; a Workers custom
+# domain cannot be attached to third-party DNS the way a Pages one could
+# (ADR 0022).
+routes = [
+  { pattern = "colors.aaadataplumbing.com", custom_domain = true }
+]
+
+# `dist/`, including `_headers`, which Workers applies natively to asset
+# responses — and, as on Pages, not to Worker-generated ones, which is why the
+# same policy is written a second time in `server/http/security.ts`.
+#
+# **Assets are matched before the Worker**, the inverse of Pages, where a
+# Function claimed its path first. `/api/*` and `/debug/*` are not files in
+# `dist/`, so they miss and fall through to the Worker; everything else is served
+# without invoking it. `run_worker_first` is deliberately absent — it would bill
+# a Worker invocation for every image and every stylesheet.
+#
+# `not_found_handling` changes nothing while `main` is set: measured, every asset
+# miss reaches the Worker whatever the setting or the `Accept` header says, so a
+# deep link answers with the API's JSON 404 rather than `index.html`. It is
+# declared because it is the right value if the Worker ever stops handling
+# misses. Do not "fix" a deep-link 404 with `run_worker_first`.
+[assets]
+directory = "dist"
+not_found_handling = "single-page-application"
+
+# The data-retention sweep (ADR 0023). This is the trigger ADR 0022 moved the
+# whole project off Pages to get: Pages Functions have no cron triggers, and the
+# `scheduled` export in `server/index.ts` is unreachable without this block.
+# `tests/wrangler-config.node.test.ts` fails the build if it is removed — a
+# deleted trigger looks exactly like a sweep with nothing to do.
+#
+# **Daily, and that is the right frequency**, not a compromise. Three of the four
+# passes have retention windows measured in days (30 for `client_errors`, 7 for
+# orphaned players, 1 for `mint_buckets`), so running more often could not delete
+# anything sooner. The fourth — stale `active` games, TTL 30 minutes — is a row
+# nothing reads: the submit path already refuses it from `started_at`, so the
+# only cost of leaving it a few hours is the row itself.
+#
+# **04:17, not 04:00.** Cron schedules cluster hard on the hour and Cloudflare
+# runs triggers on a best-effort basis; an odd minute avoids the queue. UTC, like
+# every other day boundary in this system (`dayNumber`, `dayKey`), and 04:00 UTC
+# is the low point of a European-hours hobby project's traffic.
+[triggers]
+crons = ["17 4 * * *"]
+
+# Workers Logs is **opt-in**, and the whole of ADR 0014 is `console.log`. Without
+# this block every structured record `server/log.ts` builds is discarded at the
+# edge and nothing anywhere says so. `tests/wrangler-config.node.test.ts` fails
+# the build if it is switched off.
+#
+# `head_sampling_rate = 1` is all of them: the free plan's 200,000 log events a
+# day against a 100,000 request/day Worker cap is two events per request, and
+# this Worker emits one invocation log plus one wide event. See
+# `docs/OPERATIONS.md` § 1.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# The D1 binding the Repo adapter is built against. `database_id` is per-account
+# and cannot live in the repo usefully: run
+#
+#   npx wrangler d1 create colors
+#
+# and paste the id it prints here. `wrangler dev` ignores it and uses a local
+# SQLite file under `.wrangler/`.
+[[d1_databases]]
+binding = "DB"
+database_name = "colors"
+database_id = "b23ef3b9-94f3-4e39-9f8a-9277ffdc0a53"
+migrations_dir = "migrations"
+
+# `CANONICAL_HOST` (ADR 0021) is deliberately not here, and not in an
+# `[env.production]` block either. It is set with `wrangler secret put
+# CANONICAL_HOST` on the deployed Worker, which is the only place it may exist:
+# a value in this file also reaches `wrangler dev` and would redirect localhost,
+# the e2e proxy and the tailnet into production. An env block would have to
+# redeclare `name` and every `[[d1_databases]]` entry — Workers environments
+# inherit neither — and forgetting the second deploys a Worker with no database
+# binding. See ADR 0022.

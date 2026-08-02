@@ -1,0 +1,38 @@
+# Security headers for the *static* half of the site.
+#
+# Cloudflare applies this file to the static assets it serves itself. It does NOT
+# apply to Worker responses, which is why the same policy is also built in
+# `server/http/security.ts` and set on every API response there. **Change one,
+# change the other** — a `connect-src` that is right for the API and wrong for
+# the document is a page whose fetches fail silently.
+#
+# Vite copies everything in `public/` to `dist/`, and `wrangler.toml`'s
+# `[assets] directory` is `dist`, so this ships as `dist/_headers` with no build
+# step. `wrangler dev` logs "Parsed 1 valid header rule" when it has read it —
+# which is the only feedback there is that the file is being applied at all.
+#
+# Notes on what is here, and what deliberately is not:
+#
+#   * `connect-src 'self'` is the load-bearing directive. It gates every call in
+#     `src/platform/api.ts` and the `navigator.sendBeacon` in
+#     `src/platform/errors.ts`. Both are same-origin. Get it wrong and they fail
+#     with no error a player can see.
+#   * No `'unsafe-inline'`. There is no inline `<script>` and no inline `style=`
+#     attribute in this app: colour goes through a CSS custom property set via
+#     the CSSOM, which CSP does not govern. `tests/csp.node.test.ts` fails the
+#     build if an inline script appears, if anything calls
+#     `setAttribute("style", …)`, or if this policy and the Worker's drift apart.
+#   * The picker's canvas needs no directive — it is an in-memory JS API under
+#     `script-src`.
+#   * No `preload` on HSTS. Getting on the preload list is easy; getting off it
+#     takes months to reach users.
+#   * No `X-XSS-Protection` (deprecated, and its filter has been a vulnerability
+#     in its own right) and no `X-Frame-Options` (`frame-ancestors` supersedes
+#     it).
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=()
