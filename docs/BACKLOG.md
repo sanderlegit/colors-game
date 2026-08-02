@@ -97,10 +97,10 @@ memorized-rect-vs-picker (does not, and needs the test).
   `/?board=<gameId>` to the clipboard and says nothing — success or a denied
   permission (insecure context) both look identical. A transient "Copied" line
   needs a channel the board's delegated-click model does not have yet.
-- **A `?board=` deep link cannot name the seed's owner.** The link carries only a
-  `gameId`, so the filtered board's banner reads "Showing this seed" rather than
-  naming a player. Naming them would need the attempt or a row to carry the name,
-  which the share flow does not fetch.
+- ~~**A `?board=` deep link cannot name the seed's owner.**~~ Moot since the
+  filter banner lists the seed's target colours instead of a "Showing X's seed"
+  label — there is no owner name left to be missing. The banner's colours come
+  from the anchor game's replayed attempt, the same source the row panels use.
 - **A challenge inherits the origin's difficulty, which is always `normal`.**
   Harmless until difficulty tiers are reachable (below); the inheritance already
   reads the origin row, so it will be correct when they are.

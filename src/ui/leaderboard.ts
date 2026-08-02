@@ -11,8 +11,11 @@
  *   and the composition root pushes the result back through `setAttempt`, exactly
  *   as the board itself is pushed through `setView`.
  * - **The board can be filtered to one seed.** A `ready` view may carry a
- *   `filter`, which turns the caption into that seed's board and shows a banner
- *   to play the seed or clear the filter.
+ *   `filter`, which turns the caption into that seed's board, shows a back
+ *   button (top-left) to leave it, and a banner listing the seed's target
+ *   colours beside a button to play the set. The colours live only in a replayed
+ *   attempt (ADR 0026 — a seed never leaves the server), so they arrive out of
+ *   band through `setFilterColors`, the same push shape as `setAttempt`.
  *
  * All click behaviour is one delegated listener on the section, so a row can be
  * rebuilt with `replaceChildren` without a listener surviving on a dead node.
@@ -24,9 +27,12 @@
  * row/column semantics are what make them navigable with a screen reader.
  */
 
+import { oklchToCss } from "@/color/format";
+import type { Oklch } from "@/color/types";
 import type { LeaderboardEntry } from "@/platform/api";
 import type { AttemptCard, AttemptCardView } from "@/ui/attempt";
 import { createAttemptCard } from "@/ui/attempt";
+import { setFillColor } from "@/ui/swatch";
 
 /** Which seed the board is filtered to, and whose game anchors it. */
 export type LeaderboardFilter = {
@@ -75,6 +81,8 @@ export type Leaderboard = {
   setView(view: LeaderboardView): void;
   /** Push an expanded row's attempt, once its fetch settles. */
   setAttempt(gameId: string, view: AttemptView): void;
+  /** Push the filtered seed's target colours into the banner, once fetched. */
+  setFilterColors(gameId: string, colors: readonly Oklch[]): void;
   destroy(): void;
 };
 
@@ -111,6 +119,14 @@ function hidden(text: string): HTMLSpanElement {
   return span;
 }
 
+/** One target colour of the filtered seed, painted through `--fill-color`. */
+function seedSwatch(color: Oklch): HTMLLIElement {
+  const item = document.createElement("li");
+  item.className = "leaderboard-seed-color";
+  setFillColor(item, oklchToCss(color));
+  return item;
+}
+
 export function createLeaderboard(
   root: HTMLElement,
   handlers: LeaderboardHandlers,
@@ -136,21 +152,33 @@ export function createLeaderboard(
   retry.textContent = "Try again";
   retry.hidden = true;
 
-  // Shown only for a filtered board. Its label names whose seed is on show.
+  // Top-left, and shown only for a filtered board: leaves the seed's board for
+  // the global one. This is the old "Show everyone" control, now a back button.
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "leaderboard-back";
+  back.hidden = true;
+  const backCaret = document.createElement("span");
+  backCaret.className = "leaderboard-back-caret";
+  backCaret.setAttribute("aria-hidden", "true");
+  const backText = document.createElement("span");
+  backText.textContent = "Back";
+  back.append(backCaret, backText, hidden(" to the full board"));
+
+  // Shown only for a filtered board. In place of a text label it lists the
+  // seed's target colours (pushed in by `setFilterColors`), so the banner shows
+  // *which* colours the set is, beside a button to play them.
   const banner = document.createElement("div");
   banner.className = "leaderboard-filter";
   banner.hidden = true;
-  const bannerLabel = document.createElement("span");
-  bannerLabel.className = "leaderboard-filter-label";
+  const seedColors = document.createElement("ul");
+  seedColors.className = "leaderboard-seed-colors";
+  seedColors.setAttribute("aria-label", "This seed's colours");
   const playSeed = document.createElement("button");
   playSeed.type = "button";
   playSeed.className = "leaderboard-play-seed";
-  playSeed.textContent = "Play this seed";
-  const clearFilter = document.createElement("button");
-  clearFilter.type = "button";
-  clearFilter.className = "leaderboard-clear-filter";
-  clearFilter.textContent = "Show everyone";
-  banner.append(bannerLabel, playSeed, clearFilter);
+  playSeed.textContent = "Play set";
+  banner.append(seedColors, playSeed);
 
   const table = document.createElement("table");
   table.className = "leaderboard-table";
@@ -170,7 +198,7 @@ export function createLeaderboard(
   body.className = "leaderboard-body";
   table.append(caption, head, body);
 
-  section.append(heading, status, retry, banner, table);
+  section.append(back, heading, status, retry, banner, table);
   root.append(section);
 
   const byId = new Map<string, RowRefs>();
@@ -274,7 +302,7 @@ export function createLeaderboard(
       handlers.onRetry();
       return;
     }
-    if (target.closest(".leaderboard-clear-filter") !== null) {
+    if (target.closest(".leaderboard-back") !== null) {
       handlers.onClearFilter();
       return;
     }
@@ -315,11 +343,11 @@ export function createLeaderboard(
     table.hidden = entries.length === 0;
     retry.hidden = view.status !== "error";
     banner.hidden = filter === null;
+    back.hidden = filter === null;
     caption.textContent = filter === null ? CAPTION_GLOBAL : CAPTION_SEED;
-    if (filter !== null) {
-      bannerLabel.textContent =
-        filter.name === undefined ? "Showing this seed" : `Showing ${filter.name}'s seed`;
-    }
+    // A new board is new colours: drop the previous filter's swatches so stale
+    // ones never outlive their seed. `setFilterColors` fills them back in.
+    seedColors.replaceChildren();
 
     if (view.status === "loading") status.textContent = LOADING;
     else if (view.status === "error") status.textContent = view.message;
@@ -334,10 +362,17 @@ export function createLeaderboard(
     if (refs.open) refs.card.setView(view);
   }
 
+  function setFilterColors(gameId: string, colors: readonly Oklch[]): void {
+    // The fetch that produced these was fired for a filter that may since have
+    // been cleared or changed. Only render if they still match the board on show.
+    if (filter === null || filter.gameId !== gameId) return;
+    seedColors.replaceChildren(...colors.map(seedSwatch));
+  }
+
   function destroy(): void {
     section.removeEventListener("click", onClick);
     section.remove();
   }
 
-  return { element: section, setView, setAttempt, destroy };
+  return { element: section, setView, setAttempt, setFilterColors, destroy };
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { oklch } from "@/color/types";
 import type { LeaderboardEntry } from "@/platform/api";
 import { FIXTURE_ATTEMPT, FIXTURE_LEADERBOARD } from "@/platform/api.fixture";
 import type { LeaderboardHandlers } from "@/ui/leaderboard";
@@ -251,7 +252,7 @@ describe("createLeaderboard", () => {
       expect(handlers.onFilter).toHaveBeenCalledWith("g_grace", "grace");
     });
 
-    it("shows the seed banner and play/clear controls on a filtered board", () => {
+    it("shows the seed banner, a back button, and play on a filtered board", () => {
       const { root, board, handlers } = setup();
       board.setView({
         status: "ready",
@@ -261,16 +262,46 @@ describe("createLeaderboard", () => {
 
       const banner = must(root.querySelector<HTMLElement>(".leaderboard-filter"));
       expect(banner.hidden).toBe(false);
-      expect(text(root, ".leaderboard-filter-label")).toContain("grace");
+      expect(must(root.querySelector<HTMLElement>(".leaderboard-back")).hidden).toBe(false);
       expect(text(root, ".leaderboard-caption")).toContain("seed");
+      expect(text(root, ".leaderboard-play-seed")).toBe("Play set");
 
       must(root.querySelector<HTMLButtonElement>(".leaderboard-play-seed")).click();
       expect(handlers.onPlaySeed).toHaveBeenCalledWith("g_grace");
-      must(root.querySelector<HTMLButtonElement>(".leaderboard-clear-filter")).click();
+      must(root.querySelector<HTMLButtonElement>(".leaderboard-back")).click();
       expect(handlers.onClearFilter).toHaveBeenCalledTimes(1);
     });
 
-    it("hides the banner on the global board", () => {
+    it("lists the seed's target colours once they are pushed in", () => {
+      const { root, board } = setup();
+      board.setView({
+        status: "ready",
+        entries: FIXTURE_LEADERBOARD,
+        filter: { gameId: "g_grace", name: "grace" },
+      });
+      const colors = FIXTURE_ATTEMPT.rounds.map((round) => round.target);
+      board.setFilterColors("g_grace", colors);
+
+      const swatches = [...root.querySelectorAll<HTMLElement>(".leaderboard-seed-color")];
+      expect(swatches).toHaveLength(colors.length);
+      // The colour rides the custom property, not `background` — happy-dom drops
+      // `oklch()` from the latter (see the file header of `swatch.ts`).
+      expect(swatches[0]?.style.getPropertyValue("--fill-color")).not.toBe("");
+    });
+
+    it("ignores colours pushed for a seed that is no longer on show", () => {
+      const { root, board } = setup();
+      board.setView({
+        status: "ready",
+        entries: FIXTURE_LEADERBOARD,
+        filter: { gameId: "g_grace", name: "grace" },
+      });
+      board.setFilterColors("g_someone_else", [oklch(0.6, 0.12, 30)]);
+
+      expect(root.querySelectorAll(".leaderboard-seed-color")).toHaveLength(0);
+    });
+
+    it("hides the banner and back button on the global board", () => {
       const { root, board } = setup();
       board.setView({
         status: "ready",
@@ -279,6 +310,23 @@ describe("createLeaderboard", () => {
       });
       board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
       expect(must(root.querySelector<HTMLElement>(".leaderboard-filter")).hidden).toBe(true);
+      expect(must(root.querySelector<HTMLElement>(".leaderboard-back")).hidden).toBe(true);
+    });
+
+    it("drops the previous seed's colours when the filter changes", () => {
+      const { root, board } = setup();
+      board.setView({
+        status: "ready",
+        entries: FIXTURE_LEADERBOARD,
+        filter: { gameId: "g_grace", name: "grace" },
+      });
+      board.setFilterColors("g_grace", [oklch(0.6, 0.12, 30)]);
+      board.setView({
+        status: "ready",
+        entries: FIXTURE_LEADERBOARD,
+        filter: { gameId: "g_other", name: "other" },
+      });
+      expect(root.querySelectorAll(".leaderboard-seed-color")).toHaveLength(0);
     });
   });
 });
