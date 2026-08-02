@@ -6,6 +6,13 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  /**
+   * The two specs that need a real Worker and a real D1 live in the same
+   * directory but belong to `playwright.backend.config.ts`, which brings up
+   * `wrangler dev` and a migrated database for them. Running them here
+   * would fail against a Vite dev server that serves neither.
+   */
+  testIgnore: /(backend|replay-workerd)\.spec\.ts$/,
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
