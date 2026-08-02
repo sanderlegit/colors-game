@@ -76,6 +76,46 @@ the lightness bar shows if you were too dark or too light. The panel beside the
 picker also lists your colour against the target's in numbers, so you can see the
 gap however you prefer to read it.
 
+## Your name on the leaderboard
+
+There is no account, no password and no email. When you finish a game we offer
+you a name, and if you take one we remember it with a cookie in this browser.
+
+**A name belongs to a finished game.** You can't claim one before you've played —
+that's what stops somebody sitting there reserving every good name.
+
+**If the name you want is taken, you get the next one along.** Ask for `ada` when
+`ada` exists and you become `ada-2`. We tell you when that happens rather than
+quietly giving you a name you didn't ask for.
+
+**Lose the cookie and you lose the name.** Clear your browser data, open a private
+window, or come back on your phone instead of your laptop, and you'll be a new
+player with a fresh start. There's no way to recover it — no code to write down,
+because there's nothing to prove it was you. That's the trade for never asking you
+for an email address.
+
+**"Forget me" really deletes.** Two clicks — the button asks you to confirm — and
+your name, your scores and your row on the board are gone. Not hidden: gone.
+
+## Why some games can't be submitted
+
+The colours are not sent to you — your browser works them out from a number the
+server picks, and the server keeps that number. When you submit, you send the
+colours you *guessed*, and the server works out the score itself from the same
+number. So a score on the board is one the server calculated, not one your browser
+claimed. That is what "checked rather than taken on trust" means here.
+
+Two consequences you may notice:
+
+- **If the server can't be reached when a game starts**, it never picked a number
+  for you, so there is nothing to check the game against. It still plays exactly
+  as normal and your personal best still counts — it just can't go on the board,
+  and the summary screen says so. We'd rather tell you that than show you a Submit
+  button that was never going to work.
+- **If your connection drops part-way through a ranked game**, the submission
+  fails and that game can't be sent later. The score is still yours and your
+  personal best still counts; the board entry is lost.
+
 ## A worked example
 
 Say you scored **ΔE 19.4 → 30 points**.

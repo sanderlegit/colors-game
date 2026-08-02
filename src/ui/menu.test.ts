@@ -157,6 +157,17 @@ describe("createMenu", () => {
     expect(text(root, ".menu-best")).toBe("Best: 120");
   });
 
+  it("offers a mount point for the name-claim block, above the primary action", () => {
+    const root = mount();
+    const menu = createMenu(root, { onStart: () => {}, onRestart: () => {} });
+    const slot = must(root.querySelector<HTMLElement>(".menu-submit-slot"));
+
+    expect(menu.submitSlot).toBe(slot);
+    expect(must(root.querySelector(".menu")).contains(slot)).toBe(true);
+    // The replay button stays the last thing on the screen.
+    expect(slot.nextElementSibling?.className).toBe("menu-action");
+  });
+
   it("removes itself and its listener on destroy", () => {
     const root = mount();
     const onStart = vi.fn();

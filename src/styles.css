@@ -50,6 +50,11 @@
   /* SPEC §8: the smallest thing a finger is asked to hit. */
   --tap-target: 44px;
 
+  /* The tab bar's own height, without the notch inset. It is only ever on screen
+     between games (ADR 0013), and the two overlays it sits above — the menu and
+     the board — pad themselves by it rather than by a guess. */
+  --tabbar-h: calc(var(--tap-target) + var(--space-1));
+
   /* iOS notch / home-indicator insets (requires viewport-fit=cover in index.html). */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -144,6 +149,20 @@ p {
   outline-offset: 2px;
 }
 
+/* Read aloud, never drawn. SPEC §8: state that is carried by a tint has to be
+   carried by words as well, and this is where the words go. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -167,17 +186,23 @@ p {
 /* ---------------------------------------------------------------------------
    Layout (SPEC §4)
 
-   Markup contract with src/ui/render.ts — components mount *into* these regions
-   and never create them:
+   Markup contract with src/ui/shell.ts and src/ui/render.ts — components mount
+   *into* these regions and never create them:
 
      #app
-       .game
-         .game-hud     ← createHud(root, …)
-         .game-stage   ← createSwatch(root, …)     (picker mounts into its slot)
-         .game-side    ← createReveal(root, …)     (live guess + round result,
+       .tabs             ← createTabs(root, …)     (only between games, ADR 0013)
+       .game             ← the Play tabpanel itself; no wrapper (ADR 0012)
+         .game-hud       ← createHud(root, …)
+         .game-stage     ← createSwatch(root, …)   (picker mounts into its slot)
+         .game-side      ← createReveal(root, …)   (live guess + round result,
                                                     ADR 0010)
-         .game-menu    ← createMenu(root, …)       (overlays everything when
-                                                    idle or at the summary)
+         .game-menu      ← createMenu(root, …)     (overlays everything when
+                                                    idle or at the summary; the
+                                                    identity block mounts into
+                                                    its .menu-submit-slot)
+       .leaderboard      ← createLeaderboard(root, …)  (the Leaderboard
+                                                    tabpanel, a fixed overlay
+                                                    like the menu)
 
    Both the swatch and the side panel are on screen at every viewport size without
    a scroll. That is a constraint, not an aspiration: it is asserted in e2e at
@@ -200,6 +225,14 @@ p {
     "hud"
     "stage";
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* `hidden` is only a *default* of `display: none`, and the rule above outranks it.
+   Without this, switching to the Leaderboard tab leaves the board rendered
+   underneath. The same trap catches `.menu`, `.tabs` and `.leaderboard` below —
+   see docs/history/README.md § Environment traps. */
+.game[hidden] {
+  display: none;
 }
 
 /* The HUD swaps a countdown for a confirm button between phases, and at phone
@@ -270,7 +303,9 @@ p {
   gap: var(--space-3);
   align-items: center;
   justify-content: center;
-  padding: calc(var(--space-4) + var(--safe-top)) var(--space-3)
+  /* The tab bar is fixed above this and is on screen whenever the menu is
+     (ADR 0013), so the top padding clears it rather than sliding under it. */
+  padding: calc(var(--space-4) + var(--safe-top) + var(--tabbar-h)) var(--space-3)
     calc(var(--space-4) + var(--safe-bottom));
   overflow-y: auto;
   background: var(--color-bg);
@@ -323,6 +358,197 @@ p {
 .menu-round-score {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.menu-submit-slot {
+  width: min(100%, 26rem);
+}
+
+/* --- Tabs (ADR 0012, ADR 0013) -------------------------------------------- */
+
+/* Pinned above both overlays, and present only between games — during a round it
+   is `hidden`, so a bar at the edge of the screen cannot be mis-tapped into
+   abandoning a round the player has already spent five seconds memorizing. */
+.tabs {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: calc(var(--tabbar-h) + var(--safe-top));
+  padding-top: var(--safe-top);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.tabs[hidden] {
+  display: none;
+}
+
+/* SPEC §8: the selected tab is marked by weight and a rule under it, not by a
+   colour on its own. `aria-selected` is the only hook, so what is announced and
+   what is drawn are the same fact. */
+.tab {
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 3px solid transparent;
+  color: var(--color-muted);
+}
+
+.tab[aria-selected="true"] {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-fg);
+  font-weight: 700;
+}
+
+/* --- Leaderboard (ADR 0012) ----------------------------------------------- */
+
+/* A fixed overlay like the menu, and for the same reason: it replaces the board
+   rather than competing with it for grid space. */
+.leaderboard {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  justify-items: center;
+  padding: calc(var(--space-4) + var(--safe-top) + var(--tabbar-h)) var(--space-3)
+    calc(var(--space-4) + var(--safe-bottom));
+  overflow-y: auto;
+  background: var(--color-bg);
+}
+
+.leaderboard[hidden] {
+  display: none;
+}
+
+.leaderboard-title {
+  font-size: 1.5rem;
+}
+
+/* Deliberately not hidden when empty: it is a live region, and a region that is
+   toggled in and out of `display: none` is one a screen reader is entitled to
+   miss the update of. An empty paragraph costs one grid gap. */
+.leaderboard-status {
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.leaderboard-retry {
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.leaderboard-table {
+  width: min(100%, 26rem);
+  border-collapse: collapse;
+}
+
+.leaderboard-caption {
+  padding-bottom: var(--space-2);
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.leaderboard-table thead th {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.leaderboard-rank,
+.leaderboard-score {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.leaderboard-rank {
+  width: 3rem;
+}
+
+/* SPEC §8: never colour alone. The row carries `aria-current`, a bold weight and
+   a rule down its edge, and the name cell carries a visually-hidden "(you)". */
+.leaderboard-row[aria-current="true"] {
+  border-left: 3px solid var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  font-weight: 700;
+}
+
+/* --- Identity: claiming a name (ADR 0011) --------------------------------- */
+
+.identity {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.identity-status,
+.identity-collision,
+.identity-hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+/* `.identity-status` is a live region and stays in flow even when empty; see the
+   note on `.leaderboard-status`. The hint is not, so it can collapse. */
+.identity-hint:empty {
+  display: none;
+}
+
+.identity-label {
+  display: block;
+  padding-bottom: var(--space-1);
+  font-size: 0.875rem;
+}
+
+.identity-field {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.identity-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 14rem;
+  min-height: var(--tap-target);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.identity-claim,
+.identity-forget {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* The armed half of the two-click confirm. Not colour alone — the label itself
+   changes to "Really forget me?" (ADR 0011). */
+.identity-forget.is-armed {
+  border-color: var(--color-target);
+  color: var(--color-target);
 }
 
 /* --- The shared rect (SPEC §2.1, ARCHITECTURE § "The dissolve") ----------- */

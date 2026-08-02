@@ -3,6 +3,7 @@ import { oklch } from "@/color/types";
 import {
   isConfirmEnabled,
   isFinalRound,
+  isMenuVisible,
   memorizeProgress,
   memorizeRemainingMs,
   roundNumber,
@@ -143,6 +144,21 @@ describe("isConfirmEnabled", () => {
       if (phase === "picking") continue;
       const state = stateWith({ phase, hasMoved: true, guess: oklch(0.5, 0.1, 30) });
       expect(isConfirmEnabled(state)).toBe(false);
+    }
+  });
+});
+
+describe("isMenuVisible", () => {
+  it("is true exactly in the two phases with no round in progress", () => {
+    const expected: Record<Phase, boolean> = {
+      idle: true,
+      memorize: false,
+      picking: false,
+      reveal: false,
+      summary: true,
+    };
+    for (const phase of PHASES) {
+      expect(isMenuVisible(stateWith({ phase })), phase).toBe(expected[phase]);
     }
   });
 });

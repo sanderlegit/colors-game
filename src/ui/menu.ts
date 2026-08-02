@@ -7,7 +7,7 @@
  */
 
 import { oklchToCss } from "@/color/format";
-import { totalScore } from "@/domain/selectors";
+import { isMenuVisible, totalScore } from "@/domain/selectors";
 import type { GameState } from "@/domain/state";
 import { ROUNDS_PER_GAME } from "@/domain/state";
 import { setFillColor } from "@/ui/swatch";
@@ -26,6 +26,12 @@ export type MenuOptions = {
 
 export type Menu = {
   readonly element: HTMLElement;
+  /**
+   * Empty mount point above the primary action, for the name-claim block. The
+   * same arrangement as `swatch.pickerSlot`: this component owns the layout, the
+   * shell owns what goes in it, and neither has to know about the other's state.
+   */
+  readonly submitSlot: HTMLElement;
   update(state: GameState): void;
   setBestScore(score: number): void;
   destroy(): void;
@@ -55,11 +61,14 @@ export function createMenu(
   const best = document.createElement("p");
   best.className = "menu-best";
 
+  const submitSlot = document.createElement("div");
+  submitSlot.className = "menu-submit-slot";
+
   const action = document.createElement("button");
   action.type = "button";
   action.className = "menu-action";
 
-  section.append(heading, blurb, breakdown, best, action);
+  section.append(heading, blurb, breakdown, best, submitSlot, action);
   root.append(section);
 
   // One listener for both states; which event it dispatches depends on the phase
@@ -104,7 +113,7 @@ export function createMenu(
 
   function update(state: GameState): void {
     phase = state.phase;
-    const visible = state.phase === "idle" || state.phase === "summary";
+    const visible = isMenuVisible(state);
     const total = Math.round(totalScore(state));
 
     // Decided once, on the way in, and deliberately before the composition root
@@ -151,5 +160,5 @@ export function createMenu(
     section.remove();
   }
 
-  return { element: section, update, setBestScore, destroy };
+  return { element: section, submitSlot, update, setBestScore, destroy };
 }

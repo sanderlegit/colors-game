@@ -68,3 +68,14 @@ export function isConfirmEnabled(state: GameState): boolean {
 export function isFinalRound(state: GameState): boolean {
   return state.roundIndex >= ROUNDS_PER_GAME - 1;
 }
+
+/**
+ * SPEC §3: the two phases where the menu is up and no round is in progress.
+ *
+ * It also gates the tab bar (ADR 0013), which is the reason it is a selector
+ * rather than a line inside `menu.ts`: two components deciding independently
+ * what "between games" means is two places for that answer to drift.
+ */
+export function isMenuVisible(state: GameState): boolean {
+  return state.phase === "idle" || state.phase === "summary";
+}

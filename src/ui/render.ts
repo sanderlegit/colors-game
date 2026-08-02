@@ -41,6 +41,8 @@ export type GameViewDeps = {
 
 export type GameView = {
   readonly element: HTMLElement;
+  /** The menu's mount point for the name-claim block, passed straight through. */
+  readonly submitSlot: HTMLElement;
   update(state: GameState): void;
   setBestScore(score: number): void;
   destroy(): void;
@@ -123,5 +125,11 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
     game.remove();
   }
 
-  return { element: game, update, setBestScore: menu.setBestScore, destroy };
+  return {
+    element: game,
+    submitSlot: menu.submitSlot,
+    update,
+    setBestScore: menu.setBestScore,
+    destroy,
+  };
 }
