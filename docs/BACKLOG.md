@@ -93,6 +93,17 @@ memorized-rect-vs-picker (does not, and needs the test).
 
 ### Known gaps
 
+- **The "Copy link" button gives no feedback.** ADR 0026's share writes
+  `/?board=<gameId>` to the clipboard and says nothing — success or a denied
+  permission (insecure context) both look identical. A transient "Copied" line
+  needs a channel the board's delegated-click model does not have yet.
+- **A `?board=` deep link cannot name the seed's owner.** The link carries only a
+  `gameId`, so the filtered board's banner reads "Showing this seed" rather than
+  naming a player. Naming them would need the attempt or a row to carry the name,
+  which the share flow does not fetch.
+- **A challenge inherits the origin's difficulty, which is always `normal`.**
+  Harmless until difficulty tiers are reachable (below); the inheritance already
+  reads the origin row, so it will be correct when they are.
 - **Repaint budget missed** (3.5). The floor is the per-pixel buffer fill, not the
   colour sampling; getting under 4ms would need a gamma LUT plus lattice
   interpolation. Measure on real hardware before optimising — 11ms only occurs on
@@ -254,9 +265,15 @@ exist, and `games.flags` has two defined bits. What is left:
 
 ## Deliberately deferred
 
-Daily challenge (seeds already support it), share cards, leaderboard + server-side
+Daily challenge (seeds already support it — and ADR 0026's `challengeOf` is the
+mechanism a daily would issue against), share cards, leaderboard + server-side
 target generation, sound, PWA offline install, difficulty progression tuning based
 on real score distributions.
+
+**Shipped since:** the board's expandable attempt view and per-seed *challenge*
+boards (ADR 0026). A daily challenge is now a small follow-up — a shared seed
+issued once a day and a `challengeOf` game against it — rather than new
+mechanism.
 
 ## Risk register
 

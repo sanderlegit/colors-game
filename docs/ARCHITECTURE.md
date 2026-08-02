@@ -58,17 +58,19 @@ src/
                       (keeps the picker visible through reveal, ADR 0009)
     picker.ts         hue x chroma plane (canvas) + lightness bar (ADR 0007);
                       reveal-only target reticle + guess-to-target gap (ADR 0009)
-    status.ts         the top row: round counter + running total (ADR 0026)
-    action.ts         the bottom phase action bar (ADR 0026): countdown while
+    status.ts         the top row: round counter + running total (ADR 0027)
+    action.ts         the bottom phase action bar (ADR 0027): countdown while
                       memorizing, Confirm while picking, Next round on reveal —
                       one reserved slot, in the thumb zone. Split out of hud.ts
     reveal.ts         the persistent side panel (ADR 0010): live guess while
                       picking, then ΔE, score, your-vs-target coords. Numbers
                       stack above the guess/target chips, which sit flush over the
-                      picker on phones (ADR 0026). Replaced preview.ts, deleted
+                      picker on phones (ADR 0027). Replaced preview.ts, deleted
     menu.ts           idle + summary screen; owns the identity block's mount slot
+    breakdown.ts      per-round chips + "Round N (ΔE …)"; shared by menu + attempt
     identity.ts       set-username + "Change name" rename form (ADR 0011, 0024, 0025)
-    leaderboard.ts    the board. setView(view), never update(state) (ADR 0012)
+    leaderboard.ts    the board. setView/setAttempt, never update(state) (ADR 0012, 0026)
+    attempt.ts        the panel a board row expands into (ADR 0026)
     tabs.ts           ARIA tablist, roving tabindex, automatic activation
     render.ts         createGameView(root, deps) -> { update(state), … }
     shell.ts          owns activeTab above createGameView; pushes async data in
@@ -208,6 +210,8 @@ type Shell = {
   update(state: GameState): void;      // the frame loop, unchanged
   setBestScore(score: number): void;
   setLeaderboard(view: LeaderboardView): void;   // pushed when a request settles
+  setAttempt(gameId, view): void;                // an expanded row's replay (ADR 0026)
+  selectTab(tab): void;                          // a ?board= deep link opening the board
   setIdentity(identity: PlayerIdentity): void;
   setSubmission(submission: SubmitState): void;
   destroy(): void;
@@ -353,11 +357,12 @@ Endpoints (all under `/api`, all same-origin, all `Cache-Control: no-store`):
 | GET | `/health` | 200 `{ok}` — liveness only, **touches no database** |
 | GET | `/health/deep` | 200/503 `{ok, database}` — queries D1. Hand-called; never poll it (ADR 0018) |
 | GET | `/me` | 200 identity, or 204. **Never mints a cookie** |
-| POST | `/games` | 201 `{gameId, seed, roundsTotal}` |
+| POST | `/games` | 201 `{gameId, seed, roundsTotal}`. Body may carry `challengeOf` — an existing game whose seed to play; the result is a `challenge` (ADR 0026) |
 | POST | `/games/:gameId/result` | 200 the scored submission |
+| GET | `/games/:gameId/attempt` | 200 `{totalScore, rounds[]}` — a finished game replayed with its colours, for the board's expandable row (ADR 0026). Public; no seed |
 | POST | `/name` | 200 `{name}` |
 | DELETE | `/me` | 204, plus the clearing cookie |
-| GET | `/leaderboard` | 200 `{entries[]}` |
+| GET | `/leaderboard` | 200 `{entries[]}`. `?forGame=<gameId>` returns that game's seed's board; each entry carries `gameId` |
 | POST | `/client-error` | 204. Browser exceptions, deduplicated by `hash(message + stack)` |
 
 `gameId` is 32 bytes of base64url and *is* the single-use submit token:
@@ -371,7 +376,10 @@ three are asserted in `server/**/*.test.ts`:
 
 - **`seed`, `difficulty` and `memorize_ms` are read from the `games` row**, never
   from the submit body. `memorize_ms` in particular sets the minimum-playtime
-  threshold (ADR 0015).
+  threshold (ADR 0015). Since ADR 0026, `games.kind` (`open` | `challenge`) is
+  read the same way: a `challenge` game replayed a seed *chosen* from another
+  game, so it never raises `players.best_score` — the segregation that keeps
+  chosen seeds off the global board. `submit.ts` reads `kind`, not the request.
 - **`meta.changes === 0` is not an error.** A second submission of a game the same
   player already finished replays the stored result from `seed` + `guesses_json`
   and answers 200, because a dropped response is indistinguishable from a lost

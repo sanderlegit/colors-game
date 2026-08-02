@@ -6,11 +6,10 @@
  * would mean duplicating the layout and the show/hide logic to save nothing.
  */
 
-import { oklchToCss } from "@/color/format";
 import { isMenuVisible, totalScore } from "@/domain/selectors";
 import type { GameState } from "@/domain/state";
 import { ROUNDS_PER_GAME } from "@/domain/state";
-import { setFillColor } from "@/ui/swatch";
+import { fillBreakdown } from "@/ui/breakdown";
 
 const MAX_GAME_SCORE = ROUNDS_PER_GAME * 100;
 
@@ -80,33 +79,6 @@ export function createMenu(
   }
   action.addEventListener("click", onClick);
 
-  function renderBreakdown(state: GameState): void {
-    breakdown.replaceChildren();
-    for (const [index, result] of state.results.entries()) {
-      const item = document.createElement("li");
-      item.className = "menu-round";
-
-      // Safe to show the targets here — the game is over.
-      const chip = document.createElement("span");
-      chip.className = "menu-round-chip";
-      setFillColor(chip, oklchToCss(result.target));
-
-      const guessChip = document.createElement("span");
-      guessChip.className = "menu-round-chip";
-      setFillColor(guessChip, oklchToCss(result.guess));
-
-      const label = document.createElement("span");
-      label.textContent = `Round ${index + 1}`;
-
-      const value = document.createElement("span");
-      value.className = "menu-round-score";
-      value.textContent = `${Math.round(result.score)} (ΔE ${result.deltaE.toFixed(1)})`;
-
-      item.append(chip, guessChip, label, value);
-      breakdown.append(item);
-    }
-  }
-
   let renderedKey: string | null = null;
   let lastPhase: GameState["phase"] | null = null;
   let beatTheRecord = false;
@@ -136,7 +108,8 @@ export function createMenu(
       blurb.textContent = beatTheRecord
         ? "A new best. Nicely remembered."
         : "Here is how each round went.";
-      renderBreakdown(state);
+      // Safe to show the targets here — the game is over.
+      fillBreakdown(breakdown, state.results);
       breakdown.hidden = false;
       action.textContent = "Play again";
     } else {

@@ -123,7 +123,10 @@ test("a board that fails offers a retry, and the retry re-requests", async ({ pa
   await expect(retry).toBeVisible();
   expect(api.calls("leaderboard")).toBe(1);
 
-  api.set("leaderboard", board([{ rank: 1, name: "Ada", score: 468, isYou: false }]));
+  api.set(
+    "leaderboard",
+    board([{ rank: 1, name: "Ada", score: 468, isYou: false, gameId: "g-ada" }]),
+  );
   await retry.click();
 
   await expect(page.getByRole("rowheader", { name: "Ada" })).toBeVisible();
@@ -146,8 +149,8 @@ test("an empty board says so rather than rendering an empty table", async ({ pag
 test("your own row is marked in text, not only in colour", async ({ page }) => {
   await installApi(page, {
     leaderboard: board([
-      { rank: 1, name: "Ada", score: 468, isYou: false },
-      { rank: 2, name: "Grace", score: 431, isYou: true },
+      { rank: 1, name: "Ada", score: 468, isYou: false, gameId: "g-ada" },
+      { rank: 2, name: "Grace", score: 431, isYou: true, gameId: "g-grace" },
     ]),
   });
   await page.goto("/");
@@ -169,11 +172,13 @@ test("a long board scrolls inside its own panel and the page does not", async ({
     name: `Player ${index + 1}`,
     score: 500 - index,
     isYou: false,
+    gameId: `g-${index + 1}`,
   }));
   await installApi(page, { leaderboard: board(entries) });
   await page.goto("/");
   await page.getByRole("tab", { name: "Leaderboard" }).click();
-  await expect(page.getByRole("rowheader", { name: "Player 1", exact: true })).toBeVisible();
+  // The name cell now wraps its text in the expander button, so target the text.
+  await expect(page.getByText("Player 1", { exact: true })).toBeVisible();
 
   const panel = page.locator(".leaderboard");
   expect(
@@ -272,4 +277,95 @@ test("a round still plays through to a score with every API request refused", as
   await expect(page.locator(".status-round")).toContainText("2");
   await page.waitForTimeout(MEMORIZE_MS + DISSOLVE_MS + 250);
   await expect(page.locator(".picker-plane")).toBeVisible();
+});
+
+test.describe("expanding a row into its attempt (ADR 0026)", () => {
+  test("shows the round breakdown, and closes again on a second tap", async ({ page }) => {
+    await installApi(page);
+    await page.goto("/");
+    await page.getByRole("tab", { name: "Leaderboard" }).click();
+
+    const row = page.locator(".leaderboard-row", { hasText: "Ada" });
+    const detail = page.locator("#attempt-g-ada");
+    await row.locator(".leaderboard-expander").click();
+
+    await expect(detail.locator(".attempt-total")).toContainText("372");
+    await expect(detail.locator(".breakdown-round")).toHaveCount(5);
+    await expect(row.locator(".leaderboard-expander")).toHaveAttribute("aria-expanded", "true");
+
+    await row.locator(".leaderboard-expander").click();
+    await expect(row.locator(".leaderboard-expander")).toHaveAttribute("aria-expanded", "false");
+    await expect(detail).toBeHidden();
+  });
+
+  test("lets several rows stay open at once, and closes from the panel", async ({ page }) => {
+    await installApi(page);
+    await page.goto("/");
+    await page.getByRole("tab", { name: "Leaderboard" }).click();
+
+    await page
+      .locator(".leaderboard-row", { hasText: "Ada" })
+      .locator(".leaderboard-expander")
+      .click();
+    await page
+      .locator(".leaderboard-row", { hasText: "Grace" })
+      .locator(".leaderboard-expander")
+      .click();
+    await expect(page.locator(".leaderboard-detail:not([hidden])")).toHaveCount(2);
+
+    await page
+      .locator("#attempt-g-ada")
+      .getByRole("button", { name: "Close this breakdown" })
+      .click();
+    await expect(page.locator("#attempt-g-ada")).toBeHidden();
+    await expect(page.locator("#attempt-g-grace")).toBeVisible();
+  });
+
+  test("copies a share link to the seed", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await installApi(page);
+    await page.goto("/");
+    await page.getByRole("tab", { name: "Leaderboard" }).click();
+
+    await page
+      .locator(".leaderboard-row", { hasText: "Ada" })
+      .locator(".leaderboard-expander")
+      .click();
+    await page.locator("#attempt-g-ada").getByRole("button", { name: "Copy link" }).click();
+
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain("/?board=g-ada");
+  });
+
+  test("filters the board to one seed, then clears back to everyone", async ({ page }) => {
+    const api = await installApi(page);
+    await page.goto("/");
+    await page.getByRole("tab", { name: "Leaderboard" }).click();
+    expect(api.calls("leaderboard")).toBe(1);
+
+    await page
+      .locator(".leaderboard-row", { hasText: "Ada" })
+      .locator(".leaderboard-expander")
+      .click();
+    await page.locator("#attempt-g-ada").getByRole("button", { name: "Only this seed" }).click();
+
+    const banner = page.locator(".leaderboard-filter");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("Ada");
+    expect(api.calls("leaderboard")).toBe(2);
+
+    await banner.getByRole("button", { name: "Show everyone" }).click();
+    await expect(banner).toBeHidden();
+    expect(api.calls("leaderboard")).toBe(3);
+  });
+});
+
+test("a shared /?board= link opens straight onto the seed board", async ({ page }) => {
+  const api = await installApi(page);
+  await page.goto("/?board=g-ada");
+
+  await expect(page.locator(".leaderboard")).toBeVisible();
+  await expect(page.locator(".leaderboard-filter")).toBeVisible();
+  await expect(page.getByText("Showing this seed")).toBeVisible();
+  expect(api.calls("leaderboard")).toBeGreaterThanOrEqual(1);
 });

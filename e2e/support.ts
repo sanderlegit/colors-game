@@ -72,13 +72,14 @@ export async function playFullGame(page: Page): Promise<void> {
 export type Reply = { readonly status: number; readonly body?: unknown };
 
 /** One key per endpoint `src/platform/api.ts` can reach. */
-export type ApiKey = "me" | "games" | "result" | "claim" | "leaderboard";
+export type ApiKey = "me" | "games" | "result" | "attempt" | "claim" | "leaderboard";
 
 export type BoardEntry = {
   readonly rank: number;
   readonly name: string;
   readonly score: number;
   readonly isYou: boolean;
+  readonly gameId: string;
 };
 
 export type ApiStub = {
@@ -90,6 +91,22 @@ export type ApiStub = {
 
 export function board(entries: readonly BoardEntry[]): Reply {
   return { status: 200, body: { entries } };
+}
+
+/** An attempt the decoder in `src/platform/api.ts` will accept, with colours. */
+export function attempt(): Reply {
+  return {
+    status: 200,
+    body: {
+      totalScore: 372,
+      rounds: Array.from({ length: ROUNDS_PER_GAME }, (_, index) => ({
+        deltaE: 3.5,
+        score: 74,
+        target: { L: 0.5, c: 0.1, h: (index * 60) % 360 },
+        guess: { L: 0.52, c: 0.09, h: (index * 60 + 8) % 360 },
+      })),
+    },
+  };
 }
 
 /** A submission the decoder in `src/platform/api.ts` will accept. */
@@ -112,10 +129,11 @@ function defaults(): Record<ApiKey, Reply> {
     me: { status: 204 },
     games: { status: 201, body: { gameId: "e2e-game", seed: 1337, roundsTotal: ROUNDS_PER_GAME } },
     result: submission({ name: null, rank: 3 }),
+    attempt: attempt(),
     claim: { status: 200, body: { name: "Ada" } },
     leaderboard: board([
-      { rank: 1, name: "Ada", score: 468, isYou: false },
-      { rank: 2, name: "Grace", score: 431, isYou: false },
+      { rank: 1, name: "Ada", score: 468, isYou: false, gameId: "g-ada" },
+      { rank: 2, name: "Grace", score: 431, isYou: false, gameId: "g-grace" },
     ]),
   };
 }
@@ -123,6 +141,7 @@ function defaults(): Record<ApiKey, Reply> {
 function keyFor(pathname: string): ApiKey | null {
   if (pathname === "/api/me") return "me";
   if (pathname === "/api/games") return "games";
+  if (pathname.endsWith("/attempt")) return "attempt";
   if (pathname.startsWith("/api/games/")) return "result";
   if (pathname === "/api/name") return "claim";
   if (pathname === "/api/leaderboard") return "leaderboard";

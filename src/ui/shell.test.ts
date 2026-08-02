@@ -32,7 +32,14 @@ function setup() {
 
   const shell = createShell(root, {
     game: { dispatch: () => {}, createPicker: stubPicker, nextSeed: () => 1 },
-    leaderboard: { onRetry },
+    leaderboard: {
+      onRetry,
+      onExpand: vi.fn(),
+      onShare: vi.fn(),
+      onFilter: vi.fn(),
+      onClearFilter: vi.fn(),
+      onPlaySeed: vi.fn(),
+    },
     identity: { onClaim },
     onTabSelect,
   });
@@ -164,7 +171,7 @@ describe("createShell", () => {
     shell.setIdentity({ status: "named", name: "ada" });
     shell.setSubmission({ status: "done", name: "ada", rank: 3 });
 
-    expect(root.querySelectorAll(".leaderboard-body tr")).toHaveLength(3);
+    expect(root.querySelectorAll(".leaderboard-row")).toHaveLength(3);
     expect(must(root.querySelector(".identity-named")).textContent).toContain("ada");
     expect(must(root.querySelector(".identity-status")).textContent).toContain("3rd");
   });

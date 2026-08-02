@@ -20,7 +20,7 @@
  * because only the caller knows whether the request was safe to repeat.
  */
 
-import type { Oklch } from "@/color/types";
+import { type Oklch, oklch } from "@/color/types";
 import {
   asArray,
   asBoundedNumber,
@@ -41,6 +41,27 @@ export type LeaderboardEntry = {
   readonly name: string;
   readonly score: number;
   readonly isYou: boolean;
+  /**
+   * The game this row's score belongs to. Opaque here — the client never reads a
+   * seed — but it is what an attempt breakdown is fetched from, and what the seed
+   * filter and the share link reference (ADR 0026).
+   */
+  readonly gameId: string;
+};
+/**
+ * One round of a stored game, replayed by the server for the attempt breakdown.
+ * Carries the colours, not the seed: the same shape the summary screen renders,
+ * for a game this browser never played.
+ */
+export type AttemptRound = {
+  readonly deltaE: number;
+  readonly score: number;
+  readonly target: Oklch;
+  readonly guess: Oklch;
+};
+export type Attempt = {
+  readonly totalScore: number;
+  readonly rounds: readonly AttemptRound[];
 };
 export type Identity = {
   readonly name: string | null;
@@ -71,10 +92,18 @@ export type SubmitRequest = {
 export type GameApi = {
   /** `null` is a 204: this browser has no identity on the server yet. */
   me(): Promise<Result<Identity | null>>;
-  startRanked(memorizeMs: number): Promise<Result<RankedGame>>;
+  /**
+   * Mint a game. `challengeOf` names an existing game whose seed to play — a
+   * shared challenge (ADR 0026); its result ranks only on that seed's board. Its
+   * absence is an ordinary open game.
+   */
+  startRanked(memorizeMs: number, challengeOf?: string): Promise<Result<RankedGame>>;
   submit(req: SubmitRequest): Promise<Result<Submission>>;
   claimName(name: string): Promise<Result<{ readonly name: string }>>;
-  leaderboard(): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>>;
+  /** `forGame` restricts the board to one game's seed; absent is the global board. */
+  leaderboard(forGame?: string): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>>;
+  /** The per-round breakdown for a finished game, replayed server-side. */
+  attempt(gameId: string): Promise<Result<Attempt>>;
 };
 
 export type ApiOptions = {
@@ -96,6 +125,9 @@ const MAX_ID_LENGTH = 64;
 /** SPEC §6: a round scores 0..100. Totals are not bounded — round count varies. */
 const MAX_ROUND_SCORE = 100;
 const MAX_COUNT = Number.MAX_SAFE_INTEGER;
+/** The picker's chroma cap and the hue wrap point — `server/decode.ts`'s bounds. */
+const MAX_CHROMA = 0.5;
+const MAX_HUE = 360;
 
 const OFFLINE = "You are offline.";
 const UNREACHABLE = "Could not reach the server.";
@@ -180,8 +212,34 @@ function decodeEntry(record: Record<string, unknown>): LeaderboardEntry | null {
   const name = asName(record.name);
   const score = nonNegative(record.score);
   const isYou = asBoolean(record.isYou);
+  const gameId = asString(record.gameId, MAX_ID_LENGTH);
   if (rank === null || name === null || score === null || isYou === null) return null;
-  return { rank, name, score, isYou };
+  return gameId === null ? null : { rank, name, score, isYou, gameId };
+}
+
+/** OKLCh from the server's replay: L 0..1, chroma bounded, hue 0..360. */
+function decodeOklch(value: unknown): Oklch | null {
+  const record = asRecord(value);
+  if (record === null) return null;
+  const L = asBoundedNumber(record.L, 0, 1);
+  const c = asBoundedNumber(record.c, 0, MAX_CHROMA);
+  const h = asBoundedNumber(record.h, 0, MAX_HUE);
+  return L === null || c === null || h === null ? null : oklch(L, c, h);
+}
+
+function decodeAttemptRound(record: Record<string, unknown>): AttemptRound | null {
+  const deltaE = nonNegative(record.deltaE);
+  const score = asBoundedNumber(record.score, 0, MAX_ROUND_SCORE);
+  const target = decodeOklch(record.target);
+  const guess = decodeOklch(record.guess);
+  if (deltaE === null || score === null || target === null || guess === null) return null;
+  return { deltaE, score, target, guess };
+}
+
+function decodeAttempt(record: Record<string, unknown>): Attempt | null {
+  const totalScore = nonNegative(record.totalScore);
+  const rounds = decodeList(record.rounds, decodeAttemptRound);
+  return totalScore === null || rounds === null ? null : { totalScore, rounds };
 }
 
 function decodeLeaderboard(
@@ -265,8 +323,9 @@ export function createApi(options: ApiOptions = {}): GameApi {
       if (res.value === null) return { ok: true, value: null };
       return decoded(res, decodeIdentity);
     },
-    async startRanked(memorizeMs: number): Promise<Result<RankedGame>> {
-      return decoded(await send("POST", "/games", { memorizeMs }), decodeRankedGame);
+    async startRanked(memorizeMs: number, challengeOf?: string): Promise<Result<RankedGame>> {
+      const payload = challengeOf === undefined ? { memorizeMs } : { memorizeMs, challengeOf };
+      return decoded(await send("POST", "/games", payload), decodeRankedGame);
     },
     async submit(req: SubmitRequest): Promise<Result<Submission>> {
       // `gameId` is the single-use submit token, so it belongs in the path: the
@@ -282,8 +341,18 @@ export function createApi(options: ApiOptions = {}): GameApi {
     async claimName(name: string): Promise<Result<{ readonly name: string }>> {
       return decoded(await send("POST", "/name", { name }), decodeClaimedName);
     },
-    async leaderboard(): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>> {
-      return decoded(await send("GET", "/leaderboard", undefined), decodeLeaderboard);
+    async leaderboard(
+      forGame?: string,
+    ): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>> {
+      const path =
+        forGame === undefined
+          ? "/leaderboard"
+          : `/leaderboard?forGame=${encodeURIComponent(forGame)}`;
+      return decoded(await send("GET", path, undefined), decodeLeaderboard);
+    },
+    async attempt(gameId: string): Promise<Result<Attempt>> {
+      const path = `/games/${encodeURIComponent(gameId)}/attempt`;
+      return decoded(await send("GET", path, undefined), decodeAttempt);
     },
   };
 }

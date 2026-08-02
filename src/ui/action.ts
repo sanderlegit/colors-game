@@ -1,5 +1,5 @@
 /**
- * The bottom phase-action bar (SPEC §3, §5.4, §8; ADR 0026): one reserved slot,
+ * The bottom phase-action bar (SPEC §3, §5.4, §8; ADR 0027): one reserved slot,
  * in the thumb zone, that carries whatever the current phase asks of the player.
  *
  *   memorize → the countdown ring + numeric seconds (the five seconds are a rule,
@@ -9,7 +9,7 @@
  *
  * Exactly one of the three shows at a time, and the bar reserves its height so the
  * picker above it never resizes as the control changes — the memorize→picking
- * swatch rect is asserted identical in e2e (ADR 0026).
+ * swatch rect is asserted identical in e2e (ADR 0027).
  *
  * There is no timer in here. The ring and the seconds are derived from
  * `memorizeProgress` / `memorizeRemainingMs`, which read the `now` the domain

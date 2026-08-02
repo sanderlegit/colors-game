@@ -70,7 +70,7 @@ Two regions, always both visible, never requiring a scroll:
 - **≥ 640px wide:** preview sits to the right of the swatch, as specified, with the
   round/total status spanning the top and the phase action bar spanning the bottom.
 - **< 640px (portrait phones):** the screen reads top→bottom as **status → readout →
-  swatch/picker → action bar** (ADR 0026). The round counter and running total pin
+  swatch/picker → action bar** (ADR 0027). The round counter and running total pin
   the top; the readout (preview) sits *above* the picker with its guess/target
   colour chips flush against it, so the painted colour is compared to the swatch by
   eye; the numbers (ΔE, score, the per-axis breakdown, the You/Target coordinates)
@@ -78,7 +78,7 @@ Two regions, always both visible, never requiring a scroll:
   simultaneously — a layout constraint, not a suggestion. Verified in e2e at iPhone
   14 viewport.
 - **The phase action lives in one reserved slot at the bottom, in the thumb zone**
-  (ADR 0026): the memorize countdown, then Confirm, then Next round — exactly one at
+  (ADR 0027): the memorize countdown, then Confirm, then Next round — exactly one at
   a time. Its box is reserved at a fixed height so the picker above it never moves as
   the control changes (the memorize↔picking swatch rect is asserted identical).
 - The swatch is a fixed aspect ratio (1:1) sized by `min(70vw, 50vh)` so it never
@@ -238,6 +238,23 @@ Best game score per player, one row each, with your own row marked by
 `aria-current`, a visually-hidden "(you)" and a tint — three channels, never
 colour alone (§8). It loads when the tab is opened, not at boot, and an empty
 board is a successful answer rather than an error.
+
+**A row expands into that attempt** (ADR 0026). Tapping a row slides a panel out
+beneath it — the same per-round breakdown the summary screen shows (target and
+guess chips, `Round N`, score and ΔE), for a game this browser never played. The
+panel is the server *replaying* the stored game, not the seed handed over: nothing
+about a seed reaches the client. Any number of rows open at once; tapping a row,
+or the panel's ✕, closes it. The panel also offers **Copy link** and **Only this
+seed**.
+
+**A seed can be a challenge.** "Only this seed" filters the board to one game's
+colours (best score per player on that seed); the share link opens straight onto
+that filtered board. From there, **Play this seed** starts a game on the same
+colours. A game played this way is a *challenge*: it ranks on that seed's board
+but **never raises your global best score**, because its seed was chosen and a
+chosen seed you could pick for being easy must not reach the global board
+(ADR 0015, ADR 0026). The client never names a seed — it points at an existing
+game, and the server reads the seed off that row.
 
 ### 7.3 Unranked games
 

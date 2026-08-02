@@ -56,6 +56,18 @@ const IMPROBABLE_DELTA_E = 0.5;
 
 export type RoundReport = { readonly deltaE: number; readonly score: number };
 
+/**
+ * A round with the colours that produced it (ADR 0026), for the attempt view a
+ * leaderboard row expands into. The `target` is derived from `(seed, roundIndex,
+ * difficulty)` by the same `generateTarget` the client runs, so no colour maths
+ * happens twice and the seed itself never has to leave the server to draw it —
+ * the response carries the colours, not the seed (`server/hygiene.test.ts`).
+ */
+export type RoundDetail = RoundReport & {
+  readonly target: Oklch;
+  readonly guess: Oklch;
+};
+
 export type Replay = {
   readonly rounds: readonly RoundReport[];
   /**
@@ -114,4 +126,21 @@ export function replayGame(
       : 0;
 
   return { rounds, targetHues, totalScore: Math.round(total), flags: exact | improbable };
+}
+
+/**
+ * Replay a stored game into per-round detail — target, guess, ΔE and score — for
+ * the attempt breakdown. Same arrangement of the pure core as `replayGame`, and
+ * deliberately no flags or total: this is a view of a game already scored and
+ * stored, not a scoring path, so it adds up nothing and decides nothing.
+ */
+export function replayRounds(
+  seed: number,
+  difficulty: Difficulty,
+  guesses: readonly Oklch[],
+): readonly RoundDetail[] {
+  return guesses.map((guess, index) => {
+    const target = generateTarget(seed, index, difficulty);
+    return { ...scoreGuess(target, guess), target, guess };
+  });
 }

@@ -87,14 +87,32 @@ export const startGame: Handler = async (context: RequestContext): Promise<Respo
   const refusal = await refuseStart(context, player, now);
   if (refusal !== null) return refusal;
 
+  // A challenge plays a seed chosen from an existing finished game (ADR 0026).
+  // The seed and difficulty come off that row, never the request, so the caller
+  // still cannot name the numbers it plays; it can only point at a game that was
+  // already minted for someone. `memorizeMs` stays the player's own choice — it
+  // is how long they study, not what they study.
+  let seed = context.deps.newSeed();
+  let difficulty = start.difficulty;
+  let kind: "open" | "challenge" = "open";
+  if (start.challengeOf !== undefined) {
+    const origin = await context.repo.findGame(start.challengeOf);
+    if (origin === null || origin.status !== "finished") {
+      return problem(404, "no_such_game", "That challenge is no longer available.");
+    }
+    seed = origin.seed;
+    difficulty = origin.difficulty;
+    kind = "challenge";
+  }
+
   const gameId = context.deps.newToken();
-  const seed = context.deps.newSeed();
   await context.repo.insertGame({
     id: gameId,
     playerId: player === null ? null : player.id,
     seed,
-    difficulty: start.difficulty,
+    difficulty,
     memorizeMs: start.memorizeMs,
+    kind,
     startedAt: now,
   });
 
@@ -105,9 +123,7 @@ export const startGame: Handler = async (context: RequestContext): Promise<Respo
   context.ctx.waitUntil(
     context.repo.recordTelemetry({
       rounds: [],
-      games: [
-        gameCounter({ difficulty: start.difficulty, memorizeMs: start.memorizeMs }, now, "started"),
-      ],
+      games: [gameCounter({ difficulty, memorizeMs: start.memorizeMs }, now, "started")],
     }),
   );
 

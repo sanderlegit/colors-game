@@ -90,11 +90,11 @@ describe("createMenu", () => {
     ];
     menu.update(summary(results));
 
-    const rounds = root.querySelectorAll<HTMLElement>(".menu-round");
+    const rounds = root.querySelectorAll<HTMLElement>(".breakdown-round");
     expect(rounds).toHaveLength(2);
     expect(text(root, ".menu-title")).toBe("157 of 500");
 
-    const chips = root.querySelectorAll<HTMLElement>(".menu-round-chip");
+    const chips = root.querySelectorAll<HTMLElement>(".breakdown-chip");
     // Two chips per round: target then guess.
     expect(chips).toHaveLength(4);
     const first = must(chips[0] ?? null).style.getPropertyValue(FILL_COLOR_PROPERTY);

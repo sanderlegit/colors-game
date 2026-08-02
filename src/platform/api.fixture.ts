@@ -16,7 +16,9 @@
  * about an offline `submit` does not have to invent an identity as well.
  */
 
+import { oklch } from "@/color/types";
 import type {
+  Attempt,
   GameApi,
   Identity,
   LeaderboardEntry,
@@ -28,10 +30,11 @@ import type {
 
 export type ApiCall =
   | { readonly method: "me" }
-  | { readonly method: "startRanked"; readonly memorizeMs: number }
+  | { readonly method: "startRanked"; readonly memorizeMs: number; readonly challengeOf?: string }
   | { readonly method: "submit"; readonly request: SubmitRequest }
   | { readonly method: "claimName"; readonly name: string }
-  | { readonly method: "leaderboard" };
+  | { readonly method: "leaderboard"; readonly forGame?: string }
+  | { readonly method: "attempt"; readonly gameId: string };
 
 export type CannedApi = {
   readonly me?: Result<Identity | null>;
@@ -39,6 +42,7 @@ export type CannedApi = {
   readonly submit?: Result<Submission>;
   readonly claimName?: Result<{ readonly name: string }>;
   readonly leaderboard?: Result<{ readonly entries: readonly LeaderboardEntry[] }>;
+  readonly attempt?: Result<Attempt>;
 };
 
 export type FakeApi = GameApi & {
@@ -77,10 +81,21 @@ export const FIXTURE_SUBMISSION: Submission = {
 };
 
 export const FIXTURE_LEADERBOARD: readonly LeaderboardEntry[] = [
-  { rank: 1, name: "grace", score: 468, isYou: false },
-  { rank: 2, name: "alan", score: 431, isYou: false },
-  { rank: 3, name: "ada", score: 412, isYou: true },
+  { rank: 1, name: "grace", score: 468, isYou: false, gameId: "g_grace" },
+  { rank: 2, name: "alan", score: 431, isYou: false, gameId: "g_alan" },
+  { rank: 3, name: "ada", score: 412, isYou: true, gameId: "g_ada" },
 ];
+
+export const FIXTURE_ATTEMPT: Attempt = {
+  totalScore: 412,
+  rounds: [
+    { deltaE: 1.2, score: 96, target: oklch(0.6, 0.12, 30), guess: oklch(0.61, 0.11, 33) },
+    { deltaE: 4.8, score: 81, target: oklch(0.5, 0.1, 210), guess: oklch(0.52, 0.09, 205) },
+    { deltaE: 11.3, score: 55, target: oklch(0.7, 0.14, 90), guess: oklch(0.66, 0.1, 110) },
+    { deltaE: 2.6, score: 90, target: oklch(0.45, 0.08, 300), guess: oklch(0.46, 0.08, 297) },
+    { deltaE: 7.4, score: 90, target: oklch(0.55, 0.16, 150), guess: oklch(0.57, 0.13, 158) },
+  ],
+};
 
 export function createFakeApi(canned: CannedApi = {}): FakeApi {
   const calls: ApiCall[] = [];
@@ -93,13 +108,23 @@ export function createFakeApi(canned: CannedApi = {}): FakeApi {
   return {
     calls,
     me: () => record({ method: "me" }, canned.me ?? ok(FIXTURE_IDENTITY)),
-    startRanked: (memorizeMs: number) =>
-      record({ method: "startRanked", memorizeMs }, canned.startRanked ?? ok(FIXTURE_RANKED_GAME)),
+    startRanked: (memorizeMs: number, challengeOf?: string) =>
+      record(
+        challengeOf === undefined
+          ? { method: "startRanked", memorizeMs }
+          : { method: "startRanked", memorizeMs, challengeOf },
+        canned.startRanked ?? ok(FIXTURE_RANKED_GAME),
+      ),
     submit: (request: SubmitRequest) =>
       record({ method: "submit", request }, canned.submit ?? ok(FIXTURE_SUBMISSION)),
     claimName: (name: string) =>
       record({ method: "claimName", name }, canned.claimName ?? ok({ name })),
-    leaderboard: () =>
-      record({ method: "leaderboard" }, canned.leaderboard ?? ok({ entries: FIXTURE_LEADERBOARD })),
+    leaderboard: (forGame?: string) =>
+      record(
+        forGame === undefined ? { method: "leaderboard" } : { method: "leaderboard", forGame },
+        canned.leaderboard ?? ok({ entries: FIXTURE_LEADERBOARD }),
+      ),
+    attempt: (gameId: string) =>
+      record({ method: "attempt", gameId }, canned.attempt ?? ok(FIXTURE_ATTEMPT)),
   };
 }

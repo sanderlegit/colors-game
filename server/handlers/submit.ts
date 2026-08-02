@@ -35,16 +35,16 @@
  * suite for their next attempt.
  */
 
-import type { Oklch } from "../../src/color/types";
 import { ROUNDS_PER_GAME } from "../../src/domain/state";
 import type { Handler, RequestContext } from "../context";
 import type { Game, Player } from "../db/repo";
-import { decodeGuesses, decodeSubmit, readJsonBody, type SubmitBody } from "../decode";
+import { decodeSubmit, readJsonBody, type SubmitBody } from "../decode";
 import { jsonResponse, problem } from "../http/json";
 import { currentPlayer, mintPlayer, rankOf } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
 import { setPlayerName } from "../names";
 import { replayGame } from "../replay";
+import { storedGuesses } from "../stored";
 import { submissionCounters } from "../telemetry";
 
 const TOO_FAST = "That game came back faster than it can be played.";
@@ -55,24 +55,6 @@ const BUSY = "Too many new players from your network today. Try again tomorrow."
 /** `exactOptionalPropertyTypes`: an absent header is an absent key, not undefined. */
 function headers(cookie: string | undefined): Readonly<Record<string, string>> {
   return cookie === undefined ? {} : { "set-cookie": cookie };
-}
-
-/**
- * The guesses as stored. We wrote this column, so a row that will not narrow is
- * a schema divergence rather than a bad request — it throws, and the failure
- * boundary in `app.ts` turns it into a 500. Same reasoning as `d1.ts`'s
- * per-column narrowing: fail at the seam, not three frames later.
- */
-function storedGuesses(game: Game): readonly Oklch[] {
-  let parsed: unknown = null;
-  try {
-    parsed = JSON.parse(game.guessesJson ?? "");
-  } catch {
-    parsed = null;
-  }
-  const guesses = decodeGuesses(parsed);
-  if (guesses === null) throw new Error(`unreadable guesses_json on game ${game.id}`);
-  return guesses;
 }
 
 /**
@@ -192,7 +174,11 @@ export const submitResult: Handler = async (
     playerId: player.id,
     gameId: game.id,
     totalScore: scored.totalScore,
-    ranked: scored.flags === 0,
+    // A challenge game is never ranked on the *global* board however clean it is:
+    // its seed was chosen, and a chosen seed the player could pick for being easy
+    // must not raise `best_score` (ADR 0026, upholding ADR 0015). It still counts
+    // as played and still ranks on its own seed's board.
+    ranked: scored.flags === 0 && game.kind === "open",
     at: now,
   });
 

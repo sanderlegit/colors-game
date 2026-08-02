@@ -31,6 +31,7 @@ import type {
   ExpireStaleGames,
   FinishGame,
   Game,
+  GameKind,
   GameStatus,
   NewGame,
   NewPlayer,
@@ -45,11 +46,12 @@ import type {
 
 const DIFFICULTIES: readonly Difficulty[] = ["easy", "normal", "hard"];
 const STATUSES: readonly GameStatus[] = ["active", "finished", "expired"];
+const KINDS: readonly GameKind[] = ["open", "challenge"];
 
 const PLAYER_COLUMNS =
   "id, name, name_key, name_changes, name_changed_at, best_score, best_game_id, games_played, created_at, last_seen_at";
 const GAME_COLUMNS =
-  "id, player_id, status, seed, difficulty, memorize_ms, total_score, guesses_json, flags, started_at, finished_at";
+  "id, player_id, status, seed, difficulty, memorize_ms, total_score, guesses_json, flags, kind, started_at, finished_at";
 
 function corrupt(column: string): never {
   throw new Error(`unreadable column from D1: ${column}`);
@@ -98,6 +100,7 @@ function toGame(row: Record<string, unknown>): Game {
     totalScore: num(row, "total_score"),
     guessesJson: nullableText(row, "guesses_json"),
     flags: num(row, "flags"),
+    kind: asEnum(row.kind, KINDS) ?? corrupt("kind"),
     startedAt: num(row, "started_at"),
     finishedAt: nullableNum(row, "finished_at"),
   };
@@ -167,8 +170,8 @@ export function d1Repo(db: D1Database): Repo {
     async insertGame(input: NewGame): Promise<void> {
       await db
         .prepare(
-          `INSERT INTO games (id, player_id, status, seed, difficulty, memorize_ms, started_at)
-           VALUES (?1, ?2, 'active', ?3, ?4, ?5, ?6)`,
+          `INSERT INTO games (id, player_id, status, seed, difficulty, memorize_ms, kind, started_at)
+           VALUES (?1, ?2, 'active', ?3, ?4, ?5, ?6, ?7)`,
         )
         .bind(
           input.id,
@@ -176,6 +179,7 @@ export function d1Repo(db: D1Database): Repo {
           input.seed,
           input.difficulty,
           input.memorizeMs,
+          input.kind,
           input.startedAt,
         )
         .run();
@@ -268,10 +272,14 @@ export function d1Repo(db: D1Database): Repo {
     },
 
     async topPlayers(limit: number): Promise<readonly BoardRow[]> {
+      // `best_game_id IS NOT NULL` is implied by `best_score > 0` — a score is
+      // only raised alongside the id that reached it — but it is stated so the
+      // narrowing to a non-null `gameId` below is true by the query, not by
+      // trust in that invariant.
       const result = await db
         .prepare(
-          `SELECT id, name, best_score FROM players
-            WHERE name_key IS NOT NULL AND best_score > 0
+          `SELECT id, name, best_score, best_game_id FROM players
+            WHERE name_key IS NOT NULL AND best_score > 0 AND best_game_id IS NOT NULL
             ORDER BY best_score DESC, name ASC, id ASC
             LIMIT ?1`,
         )
@@ -281,6 +289,40 @@ export function d1Repo(db: D1Database): Repo {
         playerId: num(row, "id"),
         name: text(row, "name"),
         bestScore: num(row, "best_score"),
+        gameId: text(row, "best_game_id"),
+      }));
+    },
+
+    async topPlayersBySeed(seed: number, limit: number): Promise<readonly BoardRow[]> {
+      // Top game per player on this seed, then the players in board order. The
+      // window picks one row per player under `total_score DESC, id ASC`, so a
+      // player's own ties break deterministically and `game_id` is the game that
+      // actually reached the score — not `best_game_id`, which is a global fact.
+      // The outer order ends in `player_id`, the same total order the global
+      // board gained when names stopped being unique (ADR 0024 on main).
+      const result = await db
+        .prepare(
+          `SELECT player_id, name, best_score, game_id FROM (
+             SELECT g.player_id AS player_id, p.name AS name,
+                    g.total_score AS best_score, g.id AS game_id,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY g.player_id ORDER BY g.total_score DESC, g.id ASC
+                    ) AS rn
+               FROM games g JOIN players p ON p.id = g.player_id
+              WHERE g.seed = ?1 AND g.status = 'finished' AND g.flags = 0
+                AND p.name_key IS NOT NULL
+           )
+           WHERE rn = 1
+           ORDER BY best_score DESC, name ASC, player_id ASC
+           LIMIT ?2`,
+        )
+        .bind(seed, limit)
+        .all();
+      return result.results.map((row) => ({
+        playerId: num(row, "player_id"),
+        name: text(row, "name"),
+        bestScore: num(row, "best_score"),
+        gameId: text(row, "game_id"),
       }));
     },
 

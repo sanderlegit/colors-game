@@ -1,4 +1,4 @@
-# 0026 — The phone screen is status · readout · picker · action bar
+# 0027 — The phone screen is status · readout · picker · action bar
 
 Date: 2026-08-02 · Status: accepted
 
