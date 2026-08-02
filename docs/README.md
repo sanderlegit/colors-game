@@ -14,10 +14,15 @@ document in one hop instead of grepping.
 | Touching scoring | `adr/0004-perceptual-scoring.md`, then `TUNING.md` |
 | **Tuning anything** — score curve, difficulty, timings, picker feel | `TUNING.md`. It names the constants so you don't have to grep. Note "difficulty" means two different things; that page disambiguates. |
 | **About to write a test** | `history/README.md` § Environment traps → Testing. **Read it first, not after it bites** — happy-dom silently drops `oklch()`, has no layout and no canvas, and swallows `console.log`. |
+| **Touching anything in `server/**`** | `adr/0016-server-side-replay-on-workers.md`, then `ARCHITECTURE.md` § The backend. The server is authoritative because it *replays* the pure core, not because it recomputes — re-implementing scoring on either side breaks every player's score silently. |
+| **Touching `wrangler.toml`, the deploy, or anything platform-shaped** | `adr/0022-workers-with-static-assets.md`, then `OPERATIONS.md` § 3. It is a Worker with static assets, not a Pages project — assets are matched *before* the Worker, `CANONICAL_HOST` is a `wrangler secret`, and Workers Logs is opt-in. |
 | Touching the picker | `adr/0007-picker-shows-every-hue.md` (and `adr/0005` for what was rejected) |
 | Touching the dissolve | `adr/0008-dissolve-straight-into-the-picker.md` (and `adr/0006`) |
 | About to propose an idea | `adr/README.md` § Already rejected — check it isn't there |
 | Wondering why something is the way it is | `adr/README.md`, then `history/` |
+| **Deploying, reading the telemetry, or restoring a backup** | `OPERATIONS.md`. It has the runbook and the actual SQL — do not re-derive a percentile query. |
+| **Running the real stack, or getting it onto a phone** | `OPERATIONS.md` § 3 and § 5, and `just` (which lists every recipe). A LAN address does not work and fails silently — the identity cookie is `Secure`. On iOS use the tailnet **IP**, not the MagicDNS name: § 5.0 says why the obvious alternative cannot work. ADR 0020. |
+| **Deleting rows, or touching the cron sweep** | `adr/0023-retention-is-a-daily-cron-sweep.md`, then `OPERATIONS.md` § 6. Four bounded passes through the `Repo` port, daily. **ADR 0011's 12-month name release is deliberately not built** — read § Why the name release is not here before adding it. |
 | Picking up work | `BACKLOG.md` § Known gaps |
 | Writing player-facing copy | `player-guide.md` |
 | Hitting a weird tooling failure | `history/README.md` § Environment traps |
@@ -30,6 +35,7 @@ document in one hop instead of grepping.
 | `SPEC.md` | What the game is and why. The product contract. | Yes — update when behaviour changes |
 | `ARCHITECTURE.md` | Module boundaries and the type contracts every task builds against. | Yes — update in the same commit as the code |
 | `BACKLOG.md` | Delivery plan, known gaps, risk register. | Yes |
+| `OPERATIONS.md` | Logs, telemetry queries, deploy, backups and restore. | Yes |
 | `adr/` | Decisions and their consequences. | **No — immutable. Supersede instead.** |
 | `research/` | Cited color science with VERIFIED / UNVERIFIED marked. | Append-only — when a decision supersedes a section, add a **banner at its head**; never edit the body |
 | `history/` | What actually happened, session by session. | Append-only |
@@ -47,12 +53,30 @@ document in one hop instead of grepping.
 ## Verifying a change
 
 ```sh
-npm run verify    # typecheck → lint → unit tests → build
-npm run e2e       # Playwright, Desktop Chrome + iPhone 14
-npm run test:cov  # 90% floor on src/color/** and src/domain/**, enforced
+npm run verify      # typecheck → lint → unit tests → build
+npm run e2e         # Playwright, Desktop Chrome + iPhone 14, API stubbed in-browser
+npm run e2e:backend # the same browser against `wrangler dev` + a local D1
+npm run test:cov    # 90% floor on src/color/** and src/domain/**, enforced
 ```
 
+`npm run e2e:backend` is the only thing that executes `server/db/d1.ts`, and the
+only place the `SameSite=Strict` identity cookie is exercised end to end. It
+builds, wipes and re-migrates the local database and starts both servers itself;
+it needs **no Cloudflare credentials**. Run it for any change to `server/db/**`,
+`server/index.ts`, `wrangler.toml` or the identity flow.
+
 E2E needs browsers once: `npx playwright install chromium`.
+
+The e2e directory, by file:
+
+| File | Config | What it is for |
+|------|--------|----------------|
+| `game.spec.ts` | `playwright.config.ts` | Dissolve geometry, what is in the DOM, phone layout |
+| `leaderboard.spec.ts` | `playwright.config.ts` | Tab bar (ADR 0013's tripwire), board, name claim — `/api` stubbed with `page.route` |
+| `replay-vectors.spec.ts` | `playwright.config.ts` | ADR 0016's browser engine |
+| `smoke.spec.ts` | `playwright.config.ts` | The shell loads |
+| `backend.spec.ts` | `playwright.backend.config.ts` | start → submit → claim → board against real SQL |
+| `replay-workerd.spec.ts` | `playwright.backend.config.ts` | ADR 0016's workerd engine |
 
 Layout and geometry claims are only real if asserted in `e2e/game.spec.ts` —
 three separate layout bugs in this repo were invisible to unit tests and to

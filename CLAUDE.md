@@ -12,16 +12,19 @@ Before you start, in order of how often it saves you:
 
 | Situation | Go to |
 |-----------|-------|
-| About to propose an approach | `docs/adr/README.md` § Already rejected. Twelve ideas in there look obviously right and are not. |
+| About to propose an approach | `docs/adr/README.md` § Already rejected. Thirty-odd ideas in there look obviously right and are not. |
 | Touching `src/color/**` | `docs/research/color-science.md`. Constants and test vectors are cited there — **never re-derive them from memory or fetch alternatives**. |
 | Hit a baffling tooling or test failure | `docs/history/README.md` § Environment traps. happy-dom dropping `oklch()`, TS 7 removing `baseUrl`, and swallowed `console.log` are all in there. |
 | Wondering why the code is shaped this way | `docs/adr/README.md`, then `docs/history/`. |
 | Tuning a number (score curve, difficulty, timings) | `docs/TUNING.md`. Two different things are called "difficulty"; that page disambiguates. |
+| Deploying, or reading what the game is telling us | `docs/OPERATIONS.md`. The four telemetry questions have their SQL written out; the D1 migration step is gated and separate from the deploy on purpose. |
+| Serving the real stack, or reaching it from a phone | `docs/OPERATIONS.md` § 3 and § 5; `just` lists the recipes. A LAN address fails silently — the cookie is `Secure` (ADR 0020). |
 | Looking for work | `docs/BACKLOG.md` § Known gaps. |
 
-Two decisions have already been reversed after playtesting (ADR 0005→0007,
-0006→0008). The superseded ADRs are kept deliberately — the reasoning that turned
-out to be wrong is the most useful thing in the log. Read both halves before
+Three decisions have already been reversed after playtesting (ADR 0005→0007,
+0006→0008, 0009→0010). The superseded ADRs are kept deliberately — the reasoning
+that turned out to be wrong is the most useful thing in the log. Read both halves
+before
 re-litigating either.
 
 ## The one command
@@ -34,7 +37,17 @@ Nothing is "done" until `npm run verify` passes. Do not report a task complete
 without running it and seeing it pass. If it fails, fix it — do not describe the
 failure and hand it back.
 
+`just check` runs exactly this. The `justfile` wraps the npm scripts and never
+replaces them — CI calls npm, so a recipe can never become the only way to run
+something (ADR 0019).
+
 For UI-visible changes also run `npm run e2e`.
+
+**Know what `verify` does not cover.** It runs no browser and no Worker. Two of the
+four engines in ADR 0016's replay gate — Chromium and workerd — run only under
+`npm run e2e` and `npm run e2e:backend`. A green `verify` says nothing about
+workerd agreement, and every score on the leaderboard depends on it. If you touch
+`src/color/**`, `src/domain/round.ts` or `server/replay.ts`, run all three.
 
 ## The purity rule (the most important rule here)
 
@@ -46,9 +59,17 @@ Files under `src/domain/**` and `src/color/**` are pure:
 - No `Math.random()` — randomness comes from the seeded `Rng` port.
 - No mutation of inputs; return new objects.
 
+`src/shared/**` is held to the same rule — it is imported by the pure core *and*
+by the Worker, so it cannot touch either shell.
+
 This is what makes the test suite fast and deterministic. A guard test in
 `tests/purity.node.test.ts` scans these directories and fails the build on violation.
 If you think you need an exception, you need an ADR instead.
+
+The same file carries a **second, weaker rule for `server/**`**: no DOM, and no
+importing `src/ui/**` or `src/platform/**`. The backend is an imperative shell — it
+reads a clock and mints randomness — but it is a *Workers* shell, and reaching into
+the browser shell compiles locally against DOM libs and then fails at deploy.
 
 ## Types
 

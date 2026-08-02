@@ -42,7 +42,7 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 | `idle`     | Title, "Play" button, best score                                                       | `START`             |
 | `memorize` | Swatch filled with the target color + a 5s countdown ring. Preview panel is empty/dim | timer reaches 0     |
 | `picking`  | Swatch area cross-faded into the picker; preview panel shows the live guess; Confirm   | `CONFIRM`           |
-| `reveal`   | Picker held in place with a red target reticle; the side panel's target swatch, ΔE00, score, total and target coords appear in their reserved slots — nothing shifts (ADR 0010) | `NEXT`              |
+| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, your-vs-target coords (ADR 0009) | `NEXT`              |
 | `summary`  | Per-round breakdown, total score, best-ever, replay + share-seed                        | `RESTART`           |
 
 - **Rounds per game: 5.** Long enough to smooth out luck, short enough for one sitting.
@@ -58,26 +58,28 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 Two regions, always both visible, never requiring a scroll:
 
 ```
- ┌──────────────────────────┐  ┌─────────────────┐
- │                          │  │ SIDE PANEL      │  ← one persistent place
- │      SWATCH / PICKER     │  │  You │ Target   │    (ADR 0010): live guess
- │   (same rect, always)    │  │  ΔE · score     │    while picking; the target,
- │                          │  │  readout        │    ΔE and score fill their
- └──────────────────────────┘  └─────────────────┘    reserved slots on reveal
+ ┌──────────────────────────┐  ┌───────────┐
+ │                          │  │  PREVIEW  │   ← your current guess, large flat fill
+ │      SWATCH / PICKER     │  │           │
+ │   (same rect, always)    │  ├───────────┤
+ │                          │  │  readout  │   ← hex + coords, monospace
+ └──────────────────────────┘  └───────────┘
         ▲ lightness bar directly beneath, same width (ADR 0007)
 ```
 
-- The side panel is one component: the live guess readout during `picking`, and
-  the full round result after `CONFIRM`. The result elements occupy reserved
-  slots in every phase, so the reveal shifts nothing (ADR 0010).
-- **≥ 640px wide:** the side panel sits to the right of the swatch, as specified.
-- **< 640px (portrait phones):** it moves *below* the swatch and lightness bar,
-  full width. Both remain on screen simultaneously — this is a layout constraint,
-  not a suggestion. Verified in e2e at iPhone 14 viewport. The panel is compacted
-  at this width (short swatch strips; the ΔE prose is dropped) so it fits.
+- **≥ 640px wide:** preview sits to the right of the swatch, as specified.
+- **< 640px (portrait phones):** preview moves *below* the swatch and lightness bar,
+  full width, min-height 20vh. Both remain on screen simultaneously — this is a
+  layout constraint, not a suggestion. Verified in e2e at iPhone 14 viewport.
 - The swatch is a fixed aspect ratio (1:1) sized by `min(70vw, 50vh)` so it never
-  pushes the side panel or the confirm button below the fold, including with the
-  iOS URL bar visible. Safe-area insets respected.
+  pushes the preview or the confirm button below the fold, including with the iOS
+  URL bar visible. Safe-area insets respected.
+- **A Play / Leaderboard tab bar exists only between games** — the same two
+  phases as the menu, `idle` and `summary` — and is `hidden` during `memorize`,
+  `picking` and `reveal` (ADR 0013). A bar pinned at the edge of the screen next
+  to a drag surface gets mis-tapped, and a mis-tap mid-round abandons a round the
+  player has already spent five seconds memorizing. Entering a round forces the
+  Play tab back without moving focus; Escape leaves the board.
 
 ## 5. Mechanics
 
@@ -137,11 +139,10 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
 - The reveal screen shows the raw ΔE alongside the score. Showing the underlying
   number builds trust in the scoring; hiding it invites accusations of rigging.
 - The reveal also marks where the target sat **on the picker the player just
-  used** — a red reticle on the plane and bar beside the frozen guess (ADR 0009)
-  — while the side panel fills in the target swatch and the your-vs-target
-  coordinates in slots it reserved during picking, so nothing shifts (ADR 0010).
-  This is a learning aid, not a scoring change, and it appears only once the round
-  is over: nothing about the target reaches the DOM during `picking` (§9.4 holds).
+  used** — a red reticle on the plane and bar beside the frozen guess, with the
+  your-vs-target coordinates spelled out (ADR 0009). This is a learning aid, not
+  a scoring change, and it appears only once the round is over: nothing about the
+  target reaches the DOM during `picking` (§9.4 holds).
 - Game score = sum of round scores (max 500).
 
 Scoring invariants, enforced as property tests (§9.2):
@@ -151,8 +152,79 @@ its arguments.
 ## 7. Persistence
 
 `localStorage` only, behind a port. Stores: best game score, games played, last
-used settings. No accounts, no network, no analytics in v1. The game is fully
-playable offline.
+used settings. No accounts, no analytics. The game is fully playable offline.
+
+**Amended by ADR 0016.** There is now a backend for the leaderboard, and it is
+additive: an unranked game still needs no network and stores nothing server-side.
+Ranked play adds a cookie identity, a server-issued seed, and a server-computed
+score — see `ARCHITECTURE.md` § The backend. `localStorage` remains the only
+store for settings and for the offline best score.
+
+**Amended by ADR 0015**, which is where the player-visible rules of ranked play
+live. Four of them the UI has to be able to say out loud:
+
+- **A name is claimed after a game, not before.** An identity with no completed
+  game cannot hold one.
+- **A taken name comes back suffixed** — `ada` → `ada-2` — and the server's answer
+  is the name that landed. The client renders that, never what was typed.
+- **A ranked game that comes back faster than it could be played is refused**, as
+  is one submitted more than 30 minutes after it was issued.
+- **Submitting the same finished game twice is safe** and answers the same result.
+  It is not a second game and does not count as one.
+
+**"No analytics" above is now precise rather than absolute**, per ADR 0014, which
+is what makes it still true in the sense that mattered: there is **no per-player
+and no per-round record of anything**. Two things are collected and neither is
+about a person.
+
+- **Counters.** A finished game increments bucketed counts — day, tier, memorize
+  window, round index, ΔE bucket, target-hue bucket — and nothing else. There is
+  no row to subject-access and nothing to delete, because there is no row about
+  anyone. `docs/OPERATIONS.md` § 2 is every question they answer.
+- **Browser errors.** An uncaught exception posts its message and stack to
+  `/api/client-error`, deduplicated by a hash of the two and kept 30 days. No
+  identity, no address, no URL.
+
+No third-party analytics, no tag, no beacon to anybody else, and — per ADR 0017 —
+a Content-Security-Policy that would refuse one.
+
+### 7.1 Identity
+
+There is no account and nothing to sign into. A name is a 32-byte token in a
+first-party cookie the server sets (ADR 0011):
+
+- **It is minted by submitting a score, never by arriving.** A visitor who never
+  finishes a game has no cookie and no row, so the claim form appears on the
+  summary screen and nowhere else.
+- **The client cannot read its own identity.** Every identity-touching response
+  echoes the canonical name, and the UI renders *that*, never what was typed.
+- **A taken name comes back suffixed** — `ada` → `ada-2` — and the UI says so in
+  words rather than silently showing a name nobody asked for.
+- **Lose the cookie, lose the name.** Cleared storage, a private window or a
+  second device is a fresh identity. There is no recovery code, by decision.
+- **"Forget me" is a real delete**, behind a two-click confirm (the button
+  relabels and reverts on blur). Never `window.confirm`, which blocks the frame
+  loop the whole game runs on.
+- The client validates only that a name is non-empty after trimming and within
+  `MAX_NAME_LENGTH`. Every other rule is the server's and its verdict is rendered
+  verbatim — a client that mirrors the server's rules starts refusing names the
+  server would have accepted.
+
+### 7.2 The board
+
+Best game score per player, one row each, with your own row marked by
+`aria-current`, a visually-hidden "(you)" and a tint — three channels, never
+colour alone (§8). It loads when the tab is opened, not at boot, and an empty
+board is a successful answer rather than an error.
+
+### 7.3 Unranked games
+
+A ranked game needs a server-issued seed, requested ahead of the click because
+the game starts synchronously. When that request has not landed or has failed,
+**the game is played unranked**: fully playable, personal best still recorded,
+and the summary says so instead of showing a submit button that could only fail.
+This is the property the whole seed-replay design exists to preserve — the game
+never waits on, and never breaks with, the network.
 
 ## 8. Accessibility & motion
 
@@ -201,6 +273,19 @@ No snapshot tests of markup — they rot and nobody reads the diffs.
 - The target color is not present in the DOM during `picking`.
 - Both swatch and preview are within the viewport at iPhone 14 size without scrolling.
 - Reduced-motion path completes.
+- **The tab bar is `hidden` during `picking`** — ADR 0013 names this assertion as
+  its tripwire, and it is what protects the previous line's spare vertical space.
+- The board: rows, the empty board, a failed board and its retry, your own row
+  marked in text and not only in colour, and the whole tablist driven from the
+  keyboard.
+- **A round plays through to a score with every `/api` call refused.** The API is
+  a place to put a score, never a thing the game needs in order to be played.
+- Every replay vector reproduced bit-for-bit in a real browser and in workerd
+  (ADR 0016).
+
+A second config, `npm run e2e:backend`, runs one start → submit → claim → board
+round trip against `wrangler dev` and a local D1. It is the only automated
+thing that executes `server/db/d1.ts` or exercises the identity cookie.
 
 ### 9.5 Not doing
 Pixel-diff visual regression on the picker gradient (GPU/font differences make it
@@ -208,17 +293,21 @@ flaky across machines and it would block CI for no real defect signal).
 
 ## 10. Out of scope for v1
 
-Accounts, server, leaderboards, sound, animation polish beyond the dissolve,
-i18n, PWA install/offline caching, daily challenge (the seed work makes it a
-small follow-up, deliberately).
+Accounts, sound, animation polish beyond the dissolve, i18n, PWA install/offline
+caching, daily challenge (the seed work makes it a small follow-up, deliberately).
+
+**The server and the leaderboard left this list** with ADR 0016 — the seed work
+made them a small follow-up too, exactly as §5.2 predicted. Accounts did not:
+identity is an anonymous cookie, and there is still nothing to sign into.
 
 ## 11. Definition of done for v1
 
 - [x] `npm run verify` green (typecheck, lint, unit, build)
 - [x] `npm run e2e` green on Desktop Chrome and iPhone 14 projects
+- [x] `npm run e2e:backend` green against a real Worker and a real (local) D1
 - [x] Coverage ≥ 90% on `src/color/**` and `src/domain/**` — actually 100%
 - [x] CIEDE2000 implementation passes the published test vectors — all 34 Sharma pairs
-- [ ] Playable end-to-end on a real iPhone over the LAN dev server
+- [ ] Playable end-to-end on a real iPhone against the real stack (`just tailnet`, **not** a LAN address — ADR 0020)
 - [ ] Every §8 accessibility item verified manually once, keyboard-only
 
 **This section describes the target, not the shipped state.** Parts of §5.1

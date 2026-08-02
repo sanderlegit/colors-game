@@ -26,8 +26,22 @@ score = 100 · exp( −( max(0, ΔE00 − SCORE_DEADBAND) / SCORE_SCALE ) ^ SCOR
 
 Reference points at the current settings: ΔE 2 → 97, 5 → 85, 12 → 54, 20 → 29,
 45 → 2. The property tests hold whatever the numbers become (identity = 100,
-bounded, monotonic, symmetric), so retuning is safe — but update the table in
-SPEC §6 and `player-guide.md`, which quote these figures.
+bounded, monotonic, symmetric).
+
+**Retuning is no longer a local change.** It was, before there was a leaderboard.
+Now, changing any of these constants means:
+
+1. `src/domain/scoring.test.ts` pins `SCORE_SCALE` to 16 and pins all five
+   reference points. `npm run verify` fails until you update both.
+2. SPEC §6 and `player-guide.md` quote the same figures.
+3. The "Now" column above.
+4. **Scores already on the leaderboard were computed under the old constants and
+   will not re-derive** (ADR 0016). A retune silently makes old and new board
+   entries incomparable. Decide deliberately whether to reset the board, and say
+   which you chose.
+5. The pinning test calls these "the values ADR 0004 fixed", so a retune is
+   arguably a decision that supersedes it — per CLAUDE.md § Decisions, write the
+   ADR rather than quietly editing the number.
 
 If tiers ever need to move the curve, vary `SCORE_SCALE` per tier. Do not change
 the shape per tier.
