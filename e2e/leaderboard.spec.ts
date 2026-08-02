@@ -194,13 +194,14 @@ test("a long board scrolls inside its own panel and the page does not", async ({
   expect(pageScrolls).toBe(false);
 });
 
-test("a taken name is reported with the name that actually landed", async ({ page }) => {
+test("setting a username shows who you are playing as", async ({ page }) => {
   // Five memorize windows, and there is no back door past them.
   test.slow();
 
   const api = await installApi(page, {
     result: submission({ name: null, rank: 4 }),
-    claim: { status: 200, body: { name: "Ada2" } },
+    // Names are not unique (ADR 0024), so the server echoes the name back as-is.
+    claim: { status: 200, body: { name: "Ada" } },
   });
   await page.goto("/");
   await playFullGame(page);
@@ -209,11 +210,11 @@ test("a taken name is reported with the name that actually landed", async ({ pag
   // from here.
   await expect(page.getByText("That puts you 4th")).toBeVisible();
 
-  await page.getByLabel("Claim a name for the board").fill("Ada");
-  await page.getByRole("button", { name: "Claim", exact: true }).click();
+  await page.getByLabel("Set your username").fill("Ada");
+  await page.getByRole("button", { name: "Set username", exact: true }).click();
 
-  await expect(page.getByText("Ada was taken, so you are Ada2.")).toBeVisible();
   await expect(page.getByText("Playing as")).toBeVisible();
+  await expect(page.getByText("Ada", { exact: true })).toBeVisible();
   expect(api.calls("claim")).toBe(1);
 });
 

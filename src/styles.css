@@ -501,7 +501,6 @@ p {
 }
 
 .identity-status,
-.identity-collision,
 .identity-hint {
   color: var(--color-muted);
   font-size: 0.875rem;

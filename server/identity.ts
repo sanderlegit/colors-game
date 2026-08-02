@@ -76,14 +76,19 @@ export async function mintPlayer(context: RequestContext, at: number): Promise<M
  *
  * A player with no name is not on the board at all, so this answers where they
  * *would* sit — the client's contract has no null rank on a submission, and
- * "you would be 7th if you claimed a name" is the honest reading. The empty name
+ * "you would be 7th if you set a name" is the honest reading. The empty name
  * sorts first among equal scores, which flatters them by at most one place.
+ *
+ * `id` is passed as the final tiebreak: names are not unique (ADR 0024), so two
+ * equal-scoring players with the same name are ordered by id, and the rank this
+ * returns then matches the board row's position.
  */
 export async function rankOf(
   context: RequestContext,
   bestScore: number,
   name: string | null,
+  id: number,
 ): Promise<number> {
-  const above = await context.repo.countPlayersAbove({ bestScore, name: name ?? "" });
+  const above = await context.repo.countPlayersAbove({ bestScore, name: name ?? "", id });
   return above + 1;
 }

@@ -163,10 +163,12 @@ store for settings and for the offline best score.
 **Amended by ADR 0015**, which is where the player-visible rules of ranked play
 live. Four of them the UI has to be able to say out loud:
 
-- **A name is claimed after a game, not before.** An identity with no completed
+- **A username is set after a game, not before.** An identity with no completed
   game cannot hold one.
-- **A taken name comes back suffixed** — `ada` → `ada-2` — and the server's answer
-  is the name that landed. The client renders that, never what was typed.
+- **Names are not unique** (ADR 0024). Two players may both be `ada`; the name
+  you type is the name that lands, with no suffix. The server's answer is still
+  the name that landed (its own trimmed, own-cased form), and the client renders
+  that.
 - **A ranked game that comes back faster than it could be played is refused**, as
   is one submitted more than 30 minutes after it was issued.
 - **Submitting the same finished game twice is safe** and answers the same result.
@@ -194,12 +196,13 @@ There is no account and nothing to sign into. A name is a 32-byte token in a
 first-party cookie the server sets (ADR 0011):
 
 - **It is minted by submitting a score, never by arriving.** A visitor who never
-  finishes a game has no cookie and no row, so the claim form appears on the
-  summary screen and nowhere else.
+  finishes a game has no cookie and no row, so the set-username form appears on
+  the summary screen and nowhere else.
 - **The client cannot read its own identity.** Every identity-touching response
   echoes the canonical name, and the UI renders *that*, never what was typed.
-- **A taken name comes back suffixed** — `ada` → `ada-2` — and the UI says so in
-  words rather than silently showing a name nobody asked for.
+- **Names are not unique** (ADR 0024). The name you set is the name you get; two
+  players sharing a name is an ordinary outcome, and the board keeps them apart
+  and stably ordered by account age.
 - **Lose the cookie, lose the name.** Cleared storage, a private window or a
   second device is a fresh identity. There is no recovery code, by decision.
 - **"Forget me" is a real delete**, behind a two-click confirm (the button

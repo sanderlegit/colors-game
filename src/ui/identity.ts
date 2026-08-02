@@ -1,8 +1,8 @@
 /**
- * The name-claim block on the summary screen (ADR 0011, ADR 0012).
+ * The set-username block on the summary screen (ADR 0011, ADR 0012).
  *
  * It appears **only at `summary`**, because an identity is created by submitting
- * a score and never by arriving: a claim form on the idle screen would be a
+ * a score and never by arriving: a username form on the idle screen would be a
  * button that can only fail. Visibility is therefore derived from the phase,
  * which is why this component takes `update(state)` while the board does not.
  *
@@ -11,10 +11,10 @@
  * symptom of the drift is the client refusing a name the server would have
  * accepted. Every other verdict is the server's and is rendered back verbatim.
  *
- * The form is shown when we *know* a claimable identity exists — `anonymous` —
- * rather than whenever a game ended. That is also what makes a rejected claim
- * retryable: the identity is still anonymous, so the form comes back with the
- * server's message above it.
+ * The form is shown when we *know* a named identity does not yet exist —
+ * `anonymous` — rather than whenever a game ended. That is also what makes a
+ * rejected submission retryable: the identity is still anonymous, so the form
+ * comes back with the server's message above it.
  */
 
 import type { GameState } from "@/domain/state";
@@ -32,7 +32,6 @@ export type SubmitState =
   | {
       readonly status: "done";
       readonly name: string | null;
-      readonly requested: string | null;
       readonly rank: number;
     }
   | { readonly status: "failed"; readonly message: string };
@@ -89,7 +88,7 @@ function statusLine(submission: SubmitState): string {
       if (submission.rank <= 0) return "";
       const place = ordinal(submission.rank);
       return submission.name === null
-        ? `That puts you ${place}. Claim a name to appear on the board.`
+        ? `That puts you ${place}. Set a username to appear on the board.`
         : `You are ${place} on the board.`;
     }
   }
@@ -110,10 +109,6 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   status.className = "identity-status";
   status.setAttribute("role", "status");
 
-  const collision = document.createElement("p");
-  collision.className = "identity-collision";
-  collision.hidden = true;
-
   const form = document.createElement("form");
   form.className = "identity-form";
   form.hidden = true;
@@ -121,7 +116,7 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   const label = document.createElement("label");
   label.className = "identity-label";
   label.htmlFor = "identity-name";
-  label.textContent = "Claim a name for the board";
+  label.textContent = "Set your username";
 
   const field = document.createElement("div");
   field.className = "identity-field";
@@ -137,7 +132,7 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   const claim = document.createElement("button");
   claim.type = "submit";
   claim.className = "identity-claim";
-  claim.textContent = "Claim";
+  claim.textContent = "Set username";
 
   const hint = document.createElement("p");
   hint.className = "identity-hint";
@@ -157,7 +152,7 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   named.append(document.createTextNode("Playing as "), nameValue, document.createTextNode(" "));
   named.append(forget);
 
-  section.append(status, collision, form, named);
+  section.append(status, form, named);
   root.append(section);
 
   let identity: PlayerIdentity = { status: "unknown" };
@@ -171,23 +166,6 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
     forget.classList.toggle("is-armed", armed);
   }
 
-  function renderCollision(): void {
-    const done = submission.status === "done" ? submission : null;
-    const requested = done?.requested ?? null;
-    const landed = done?.name ?? null;
-    if (requested === null || landed === null || requested === landed) {
-      collision.hidden = true;
-      return;
-    }
-    collision.replaceChildren(
-      strong(requested),
-      document.createTextNode(" was taken, so you are "),
-      strong(landed),
-      document.createTextNode("."),
-    );
-    collision.hidden = false;
-  }
-
   function render(): void {
     // ADR 0011: identity is minted by submitting a score, so the block has
     // nothing to say anywhere but the summary.
@@ -198,7 +176,7 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
       identity.status === "named" ? identity.name : "",
       submission.status,
       statusLine(submission),
-      submission.status === "done" ? `${submission.requested}>${submission.name}` : "",
+      submission.status === "done" ? `${submission.name}` : "",
     ].join("|");
     if (key === renderedKey) return;
     renderedKey = key;
@@ -216,7 +194,6 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
     named.hidden = identity.status !== "named";
     if (identity.status === "named") nameValue.textContent = identity.name;
 
-    renderCollision();
     renderForget();
   }
 

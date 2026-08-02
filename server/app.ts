@@ -34,7 +34,7 @@ import { startGame } from "./handlers/games";
 import { deepHealth, health } from "./handlers/health";
 import { getLeaderboard } from "./handlers/leaderboard";
 import { forgetMe, getMe } from "./handlers/me";
-import { claimName } from "./handlers/name";
+import { setUsername } from "./handlers/name";
 import { submitResult } from "./handlers/submit";
 import { canonicalRedirect } from "./http/canonical";
 import { IDENTITY_COOKIE, readCookie } from "./http/cookie";
@@ -79,7 +79,7 @@ const ROUTES: readonly ApiRoute[] = [
     handle: submitResult,
     event: "score_submitted",
   },
-  { method: "POST", path: "/api/name", handle: claimName, event: "name_claimed" },
+  { method: "POST", path: "/api/name", handle: setUsername, event: "name_claimed" },
   { method: "GET", path: "/api/leaderboard", handle: getLeaderboard, event: "leaderboard_read" },
   {
     method: "POST",

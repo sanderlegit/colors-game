@@ -32,6 +32,7 @@ the most valuable thing in here.
 | [0021](0021-one-canonical-hostname.md) | One canonical hostname, enforced by the Worker with a 308 | accepted — **premise partly obsolete after 0022** |
 | [0022](0022-workers-with-static-assets.md) | A Worker with static assets, not a Pages project | accepted |
 | [0023](0023-retention-is-a-daily-cron-sweep.md) | Retention is a daily cron sweep, and it does not release names | accepted |
+| [0024](0024-duplicate-display-names.md) | Display names are not unique; the board is ordered by (score, name, id) | accepted |
 
 ## Already rejected — do not re-propose without new evidence
 
@@ -60,6 +61,7 @@ rule because this table has already failed that way once (the reveal-panel row).
 | Block the first frame on an identity or session request | Boot must await nothing. Identity starts unknown and renders nothing | 0011, 0012 |
 | `window.confirm` for "forget me" | Blocks the rAF loop, is unstyleable, and is an ambient global the UI layer has no business touching. Two-click confirm instead | 0011 |
 | Mirror the server's username rules on the client | The two drift, and the client starts rejecting names the server would accept. Client validates non-empty and max length; everything else is echoed back verbatim | 0011 |
+| Make display names unique again (or keep the suffix ladder) | Uniqueness bought nothing here — a name is not a credential and the row is keyed by a cookie hash — and `ada-2` reads as the game overruling the player. Duplicates are fine; the board stays coherent because its order ends in `id`. Re-adding it means re-deriving that total order | 0024 |
 | A persistent tab bar visible during play | Mis-tap abandons a round the player has spent five seconds memorising, and nothing on the board is actionable mid-round. Note the *layout* argument for this is false — there is ~100px of slack | 0013 |
 | A logging library (pino/winston) | Workers Logs already indexes `JSON.stringify` output; the library would wrap indexing the platform does | 0014 |
 | Several log lines per request | The free plan gives ~2 log events per request against the Worker cap. One wide event is the budget, not a style choice — and `tests/logging.node.test.ts` allows `console` in exactly one file | 0014, `../OPERATIONS.md` |
