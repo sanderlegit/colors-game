@@ -58,8 +58,25 @@ const VALID_SUBMISSION = {
 };
 const VALID_LEADERBOARD = {
   entries: [
-    { rank: 1, name: "grace", score: 468, isYou: false },
-    { rank: 2, name: "ada", score: 412, isYou: true },
+    { rank: 1, name: "grace", score: 468, isYou: false, gameId: "g_grace" },
+    { rank: 2, name: "ada", score: 412, isYou: true, gameId: "g_ada" },
+  ],
+};
+const VALID_ATTEMPT = {
+  totalScore: 412,
+  rounds: [
+    {
+      deltaE: 1.2,
+      score: 96,
+      target: { L: 0.6, c: 0.12, h: 30 },
+      guess: { L: 0.61, c: 0.11, h: 33 },
+    },
+    {
+      deltaE: 4.8,
+      score: 81,
+      target: { L: 0.5, c: 0.1, h: 210 },
+      guess: { L: 0.52, c: 0.09, h: 205 },
+    },
   ],
 };
 
@@ -67,6 +84,7 @@ const ROUTES: Record<string, unknown> = {
   "/api/me": VALID_IDENTITY,
   "/api/games": VALID_GAME,
   "/api/games/g_01H8XK/result": VALID_SUBMISSION,
+  "/api/games/g_01H8XK/attempt": VALID_ATTEMPT,
   "/api/name": { name: "ada" },
   "/api/leaderboard": VALID_LEADERBOARD,
 };
@@ -88,6 +106,7 @@ const EVERY_METHOD: readonly ((api: GameApi) => Promise<Result<unknown>>)[] = [
   (api) => api.submit({ gameId: "g_01H8XK", guesses: GUESSES }),
   (api) => api.claimName("ada"),
   (api) => api.leaderboard(),
+  (api) => api.attempt("g_01H8XK"),
 ];
 
 describe("createApi request shape", () => {
@@ -400,6 +419,7 @@ describe("createFakeApi", () => {
       "submit",
       "claimName",
       "leaderboard",
+      "attempt",
     ]);
   });
 

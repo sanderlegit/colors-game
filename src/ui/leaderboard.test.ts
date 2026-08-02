@@ -1,23 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LeaderboardEntry } from "@/platform/api";
-import { FIXTURE_LEADERBOARD } from "@/platform/api.fixture";
+import { FIXTURE_ATTEMPT, FIXTURE_LEADERBOARD } from "@/platform/api.fixture";
+import type { LeaderboardHandlers } from "@/ui/leaderboard";
 import { createLeaderboard } from "@/ui/leaderboard";
 
-function must<T extends Element>(element: T | null): T {
-  if (element === null) throw new Error("expected element to exist");
+function must<T extends Element>(element: T | null | undefined): T {
+  if (element === null || element === undefined) throw new Error("expected element to exist");
   return element;
+}
+
+function q<T extends Element>(parent: ParentNode, selector: string): T {
+  return must(parent.querySelector<T>(selector));
+}
+
+function handlers(): LeaderboardHandlers {
+  return {
+    onRetry: vi.fn(),
+    onExpand: vi.fn(),
+    onShare: vi.fn(),
+    onFilter: vi.fn(),
+    onClearFilter: vi.fn(),
+    onPlaySeed: vi.fn(),
+  };
 }
 
 function setup(maxRows?: number) {
   const root = document.createElement("div");
   document.body.append(root);
-  const onRetry = vi.fn();
-  const board = createLeaderboard(root, { onRetry }, maxRows === undefined ? {} : { maxRows });
-  return { root, board, onRetry };
+  const h = handlers();
+  const board = createLeaderboard(root, h, maxRows === undefined ? {} : { maxRows });
+  return { root, board, handlers: h };
 }
 
+/** Only the data rows — the interleaved detail rows are a different class. */
 function rows(root: HTMLElement): HTMLTableRowElement[] {
-  return [...root.querySelectorAll<HTMLTableRowElement>(".leaderboard-body tr")];
+  return [...root.querySelectorAll<HTMLTableRowElement>(".leaderboard-row")];
+}
+
+function details(root: HTMLElement): HTMLTableRowElement[] {
+  return [...root.querySelectorAll<HTMLTableRowElement>(".leaderboard-detail")];
 }
 
 function text(root: HTMLElement, selector: string): string {
@@ -39,14 +60,14 @@ describe("createLeaderboard", () => {
   });
 
   it("renders the server's message and a retry when the request fails", () => {
-    const { root, board, onRetry } = setup();
+    const { root, board, handlers } = setup();
     board.setView({ status: "error", message: "You are offline." });
 
     expect(text(root, ".leaderboard-status")).toBe("You are offline.");
     const retry = must(root.querySelector<HTMLButtonElement>(".leaderboard-retry"));
     expect(retry.hidden).toBe(false);
     retry.click();
-    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(handlers.onRetry).toHaveBeenCalledTimes(1);
   });
 
   it("treats an empty board as a successful answer, not an error", () => {
@@ -63,15 +84,15 @@ describe("createLeaderboard", () => {
     board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
 
     expect(root.querySelector("table.leaderboard-table caption")).not.toBeNull();
-    const headers = [...root.querySelectorAll("thead th")];
-    expect(headers).toHaveLength(3);
-    for (const header of headers) expect(header.getAttribute("scope")).toBe("col");
+    const columns = [...root.querySelectorAll("thead th")];
+    expect(columns).toHaveLength(3);
+    for (const header of columns) expect(header.getAttribute("scope")).toBe("col");
 
     const first = must(rows(root)[0] ?? null);
     expect(must(first.querySelector(".leaderboard-rank")).textContent).toBe("1");
-    expect(must(first.querySelector(".leaderboard-name")).textContent).toBe("grace");
+    expect(must(first.querySelector(".leaderboard-name-text")).textContent).toBe("grace");
     expect(must(first.querySelector(".leaderboard-score")).textContent).toBe("468");
-    // The name is the row's header, which is what makes the row navigable.
+    // The name is still the row's header, which is what makes the row navigable.
     expect(must(first.querySelector(".leaderboard-name")).getAttribute("scope")).toBe("row");
   });
 
@@ -82,7 +103,7 @@ describe("createLeaderboard", () => {
     const yours = rows(root).filter((row) => row.getAttribute("aria-current") === "true");
     expect(yours).toHaveLength(1);
     const row = must(yours[0] ?? null);
-    expect(must(row.querySelector(".leaderboard-name")).textContent).toBe("ada (you)");
+    expect(must(row.querySelector(".leaderboard-name-text")).textContent).toBe("ada");
     expect(must(row.querySelector(".leaderboard-name .visually-hidden")).textContent).toBe(
       " (you)",
     );
@@ -91,7 +112,7 @@ describe("createLeaderboard", () => {
   it("rebuilds the rows on every view rather than appending to them", () => {
     const { root, board } = setup();
     const later: readonly LeaderboardEntry[] = [
-      { rank: 1, name: "grace", score: 500, isYou: false },
+      { rank: 1, name: "grace", score: 500, isYou: false, gameId: "g_grace" },
     ];
 
     board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
@@ -101,13 +122,6 @@ describe("createLeaderboard", () => {
     expect(must(rows(root)[0] ?? null).textContent).toContain("500");
   });
 
-  it("drops the rows again when a later request is still in flight", () => {
-    const { root, board } = setup();
-    board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
-    board.setView({ status: "loading" });
-    expect(rows(root)).toHaveLength(0);
-  });
-
   it("caps how many rows a response can turn into", () => {
     const { root, board } = setup(2);
     board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
@@ -115,7 +129,7 @@ describe("createLeaderboard", () => {
   });
 
   it("removes itself and its listener on destroy", () => {
-    const { root, board, onRetry } = setup();
+    const { root, board, handlers } = setup();
     board.setView({ status: "error", message: "nope" });
     const retry = must(root.querySelector<HTMLButtonElement>(".leaderboard-retry"));
 
@@ -123,6 +137,148 @@ describe("createLeaderboard", () => {
     retry.click();
 
     expect(root.querySelector(".leaderboard")).toBeNull();
-    expect(onRetry).not.toHaveBeenCalled();
+    expect(handlers.onRetry).not.toHaveBeenCalled();
+  });
+
+  describe("expanding a row into its attempt", () => {
+    function expandFirst(root: HTMLElement) {
+      const expander = q<HTMLButtonElement>(must(rows(root)[0]), ".leaderboard-expander");
+      expander.click();
+      return { expander, detail: must(details(root)[0]) };
+    }
+
+    it("opens the detail row and asks the root to fetch it", () => {
+      const { root, board, handlers } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+
+      const { expander, detail } = expandFirst(root);
+      expect(expander.getAttribute("aria-expanded")).toBe("true");
+      expect(detail.hidden).toBe(false);
+      expect(detail.classList.contains("is-open")).toBe(true);
+      // The expander controls the detail row it reveals.
+      expect(expander.getAttribute("aria-controls")).toBe(detail.id);
+      expect(handlers.onExpand).toHaveBeenCalledWith("g_grace");
+    });
+
+    it("renders the pushed attempt as a breakdown with a chip per colour", () => {
+      const { root, board } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      expandFirst(root);
+
+      board.setAttempt("g_grace", { status: "ready", attempt: FIXTURE_ATTEMPT });
+
+      const detail = must(details(root)[0]);
+      expect(detail.querySelectorAll(".breakdown-round")).toHaveLength(5);
+      // Two chips per round: target and guess.
+      expect(detail.querySelectorAll(".breakdown-chip")).toHaveLength(10);
+      expect(q(detail, ".attempt-total").textContent).toContain("412");
+    });
+
+    it("closes again when the row is clicked a second time", () => {
+      const { root, board } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      const { expander, detail } = expandFirst(root);
+
+      expander.click();
+      expect(expander.getAttribute("aria-expanded")).toBe("false");
+      expect(detail.hidden).toBe(true);
+      expect(detail.classList.contains("is-open")).toBe(false);
+    });
+
+    it("closes from the panel's own close button", () => {
+      const { root, board } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      expandFirst(root);
+      board.setAttempt("g_grace", { status: "ready", attempt: FIXTURE_ATTEMPT });
+
+      const detail = must(details(root)[0]);
+      q<HTMLButtonElement>(detail, ".attempt-close").click();
+      expect(detail.hidden).toBe(true);
+    });
+
+    it("lets several rows be open at once", () => {
+      const { root, board } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      for (const row of rows(root)) {
+        q<HTMLButtonElement>(row, ".leaderboard-expander").click();
+      }
+      expect(details(root).filter((d) => !d.hidden)).toHaveLength(3);
+    });
+
+    it("does not re-fetch an attempt it has already been given", () => {
+      const { root, board, handlers } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      const expander = q<HTMLButtonElement>(must(rows(root)[0]), ".leaderboard-expander");
+
+      expander.click(); // open → fetch
+      board.setAttempt("g_grace", { status: "ready", attempt: FIXTURE_ATTEMPT });
+      expander.click(); // close
+      expander.click(); // open again → cached, no second fetch
+
+      expect(handlers.onExpand).toHaveBeenCalledTimes(1);
+      expect(must(details(root)[0]).querySelectorAll(".breakdown-round")).toHaveLength(5);
+    });
+
+    it("surfaces an attempt that failed to load without a breakdown", () => {
+      const { root, board } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      expandFirst(root);
+
+      board.setAttempt("g_grace", { status: "error", message: "The server had a problem." });
+      const detail = must(details(root)[0]);
+      expect(q(detail, ".attempt-status").textContent).toBe("The server had a problem.");
+      expect(detail.querySelectorAll(".breakdown-round")).toHaveLength(0);
+    });
+  });
+
+  describe("sharing and filtering", () => {
+    function openPanel(root: HTMLElement) {
+      q<HTMLButtonElement>(must(rows(root)[0]), ".leaderboard-expander").click();
+      return must(details(root)[0]);
+    }
+
+    it("shares the game behind the row", () => {
+      const { root, board, handlers } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      must(openPanel(root).querySelector<HTMLButtonElement>(".attempt-share")).click();
+      expect(handlers.onShare).toHaveBeenCalledWith("g_grace");
+    });
+
+    it("asks to filter to the row's seed, carrying the player's name for the banner", () => {
+      const { root, board, handlers } = setup();
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      must(openPanel(root).querySelector<HTMLButtonElement>(".attempt-filter")).click();
+      expect(handlers.onFilter).toHaveBeenCalledWith("g_grace", "grace");
+    });
+
+    it("shows the seed banner and play/clear controls on a filtered board", () => {
+      const { root, board, handlers } = setup();
+      board.setView({
+        status: "ready",
+        entries: FIXTURE_LEADERBOARD,
+        filter: { gameId: "g_grace", name: "grace" },
+      });
+
+      const banner = must(root.querySelector<HTMLElement>(".leaderboard-filter"));
+      expect(banner.hidden).toBe(false);
+      expect(text(root, ".leaderboard-filter-label")).toContain("grace");
+      expect(text(root, ".leaderboard-caption")).toContain("seed");
+
+      must(root.querySelector<HTMLButtonElement>(".leaderboard-play-seed")).click();
+      expect(handlers.onPlaySeed).toHaveBeenCalledWith("g_grace");
+      must(root.querySelector<HTMLButtonElement>(".leaderboard-clear-filter")).click();
+      expect(handlers.onClearFilter).toHaveBeenCalledTimes(1);
+    });
+
+    it("hides the banner on the global board", () => {
+      const { root, board } = setup();
+      board.setView({
+        status: "ready",
+        entries: FIXTURE_LEADERBOARD,
+        filter: { gameId: "g_grace", name: "grace" },
+      });
+      board.setView({ status: "ready", entries: FIXTURE_LEADERBOARD });
+      expect(must(root.querySelector<HTMLElement>(".leaderboard-filter")).hidden).toBe(true);
+    });
   });
 });

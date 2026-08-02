@@ -18,6 +18,7 @@ const newGame = (id: string, over: Partial<NewGame> = {}): NewGame => ({
   seed: 41762,
   difficulty: "normal",
   memorizeMs: 5000,
+  kind: "open",
   startedAt: T0,
   ...over,
 });
@@ -483,10 +484,99 @@ describe("the board", () => {
     expect((await repo.topPlayers(10)).map((row) => row.name)).toEqual(["Ada"]);
   });
 
-  it("carries the player id, so a caller can mark its own row", async () => {
+  it("carries the player id and best game, so a caller can mark and open its own row", async () => {
     const repo = memoryRepo();
     const id = await ranked(repo, "h1", "Ada", 400);
-    expect(await repo.topPlayers(10)).toEqual([{ playerId: id, name: "Ada", bestScore: 400 }]);
+    expect(await repo.topPlayers(10)).toEqual([
+      { playerId: id, name: "Ada", bestScore: 400, gameId: "g-h1" },
+    ]);
+  });
+});
+
+describe("the per-seed board (ADR 0026)", () => {
+  /** A named player who finished one game on `seed`, scoring `score`. */
+  async function onSeed(
+    repo: Repo,
+    hash: string,
+    name: string,
+    seed: number,
+    score: number,
+    over: { readonly id?: string; readonly kind?: "open" | "challenge" } = {},
+  ): Promise<string> {
+    const id = await withPlayer(repo, hash);
+    await repo.setName({ playerId: id, name, key: name.toLowerCase(), at: T0 });
+    const gameId = over.id ?? `g-${hash}-${seed}`;
+    await repo.insertGame(newGame(gameId, { seed, kind: over.kind ?? "challenge" }));
+    await repo.finishGame({
+      gameId,
+      playerId: id,
+      totalScore: score,
+      guessesJson: "[]",
+      flags: 0,
+      finishedAt: T0,
+    });
+    return gameId;
+  }
+
+  it("shows every player who played the seed, best score first, whatever the kind", async () => {
+    const repo = memoryRepo();
+    await onSeed(repo, "h1", "Ada", 100, 300, { kind: "challenge" });
+    await onSeed(repo, "h2", "Grace", 100, 460, { kind: "open" });
+    await onSeed(repo, "h3", "Alan", 999, 500, { kind: "challenge" }); // a different seed
+    const board = await repo.topPlayersBySeed(100, 10);
+    expect(board.map((row) => row.name)).toEqual(["Grace", "Ada"]);
+  });
+
+  it("keeps each player's best game on the seed, and names that game not their global best", async () => {
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 });
+    for (const [gameId, score] of [
+      ["low", 200],
+      ["high", 480],
+    ] as const) {
+      await repo.insertGame(newGame(gameId, { seed: 55, kind: "challenge" }));
+      await repo.finishGame({
+        gameId,
+        playerId: id,
+        totalScore: score,
+        guessesJson: "[]",
+        flags: 0,
+        finishedAt: T0,
+      });
+    }
+    expect(await repo.topPlayersBySeed(55, 10)).toEqual([
+      { playerId: id, name: "Ada", bestScore: 480, gameId: "high" },
+    ]);
+  });
+
+  it("excludes flagged and unnamed games, matching the global board's rules", async () => {
+    const repo = memoryRepo();
+    // Flagged: on the seed but off the board.
+    const flagged = await withPlayer(repo, "h1");
+    await repo.setName({ playerId: flagged, name: "Cheat", key: "cheat", at: T0 });
+    await repo.insertGame(newGame("f1", { seed: 7, kind: "challenge" }));
+    await repo.finishGame({
+      gameId: "f1",
+      playerId: flagged,
+      totalScore: 500,
+      guessesJson: "[]",
+      flags: 1,
+      finishedAt: T0,
+    });
+    // Unnamed: played the seed but has no name to show.
+    const nameless = await withPlayer(repo, "h2");
+    await repo.insertGame(newGame("n1", { seed: 7, kind: "challenge" }));
+    await repo.finishGame({
+      gameId: "n1",
+      playerId: nameless,
+      totalScore: 400,
+      guessesJson: "[]",
+      flags: 0,
+      finishedAt: T0,
+    });
+    await onSeed(repo, "h3", "Ada", 7, 300);
+    expect((await repo.topPlayersBySeed(7, 10)).map((row) => row.name)).toEqual(["Ada"]);
   });
 });
 

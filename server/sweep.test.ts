@@ -73,6 +73,7 @@ async function addGame(repo: Repo, id: string, startedAt: number): Promise<void>
     seed: 1,
     difficulty: "normal",
     memorizeMs: 5000,
+    kind: "open",
     startedAt,
   });
 }
@@ -277,6 +278,7 @@ describe("orphaned players", () => {
       seed: 1,
       difficulty: "normal",
       memorizeMs: 5000,
+      kind: "open",
       startedAt: at,
     });
 

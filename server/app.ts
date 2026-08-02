@@ -29,6 +29,7 @@
 import type { AppExecutionContext } from "./context";
 import { type AppDeps, productionDeps, type RequestContext } from "./context";
 import { replayVectors } from "./debug/replay-vectors";
+import { getAttempt } from "./handlers/attempt";
 import { reportClientError } from "./handlers/clientError";
 import { startGame } from "./handlers/games";
 import { deepHealth, health } from "./handlers/health";
@@ -77,6 +78,12 @@ const ROUTES: readonly ApiRoute[] = [
     path: "/api/games/:gameId/result",
     handle: submitResult,
     event: "score_submitted",
+  },
+  {
+    method: "GET",
+    path: "/api/games/:gameId/attempt",
+    handle: getAttempt,
+    event: "attempt_read",
   },
   { method: "POST", path: "/api/name", handle: setUsername, event: "name_claimed" },
   { method: "GET", path: "/api/leaderboard", handle: getLeaderboard, event: "leaderboard_read" },

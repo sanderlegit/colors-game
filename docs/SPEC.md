@@ -229,6 +229,23 @@ Best game score per player, one row each, with your own row marked by
 colour alone (§8). It loads when the tab is opened, not at boot, and an empty
 board is a successful answer rather than an error.
 
+**A row expands into that attempt** (ADR 0026). Tapping a row slides a panel out
+beneath it — the same per-round breakdown the summary screen shows (target and
+guess chips, `Round N`, score and ΔE), for a game this browser never played. The
+panel is the server *replaying* the stored game, not the seed handed over: nothing
+about a seed reaches the client. Any number of rows open at once; tapping a row,
+or the panel's ✕, closes it. The panel also offers **Copy link** and **Only this
+seed**.
+
+**A seed can be a challenge.** "Only this seed" filters the board to one game's
+colours (best score per player on that seed); the share link opens straight onto
+that filtered board. From there, **Play this seed** starts a game on the same
+colours. A game played this way is a *challenge*: it ranks on that seed's board
+but **never raises your global best score**, because its seed was chosen and a
+chosen seed you could pick for being easy must not reach the global board
+(ADR 0015, ADR 0026). The client never names a seed — it points at an existing
+game, and the server reads the seed off that row.
+
 ### 7.3 Unranked games
 
 A ranked game needs a server-issued seed, requested ahead of the click because

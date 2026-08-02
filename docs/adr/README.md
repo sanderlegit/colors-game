@@ -34,6 +34,7 @@ the most valuable thing in here.
 | [0023](0023-retention-is-a-daily-cron-sweep.md) | Retention is a daily cron sweep, and it does not release names | accepted |
 | [0024](0024-duplicate-display-names.md) | Display names are not unique; the board is ordered by (score, name, id) | accepted |
 | [0025](0025-rename-in-app-delete-by-operator.md) | Rename in the app; deletion is an operator action, not self-serve | accepted — **revises 0011** |
+| [0026](0026-leaderboard-attempts-and-seed-challenges.md) | Board rows expand into a replayed attempt; chosen seeds are challenges, ranked on their own board only | accepted |
 
 ## Already rejected — do not re-propose without new evidence
 
@@ -53,6 +54,9 @@ rule because this table has already failed that way once (the reveal-panel row).
 | Add React/Vue/Svelte/Lit | ~10 components, no lists, the one hard component is a canvas driven imperatively anyway | 0001 |
 | Re-implement scoring or target generation on the server | Two implementations of CIEDE2000 will not agree to the last decimal, and the player sees the disagreement. The server replays the *same* pure functions | 0016 |
 | A `rounds` table | Under seed replay every round's target, ΔE and score is derived. Only the guesses are irreducible | 0016 |
+| Return the seed on the attempt view or the board so the client replays | The seed leaves the server in exactly one response (`POST /games`). The server replays and echoes the *colours*; the raw seed never travels, and the client keys everything on an opaque `gameId` | 0026 |
+| Let a challenge (chosen-seed) game raise the global best score | A player would pick the easiest existing seed and farm the top spot — the exact thing ADR 0015 forbids. Challenges rank on their seed's board only | 0015, 0026 |
+| Let a ranked client pass its own arbitrary seed for a "same colours" mode | Same seed-farming hole. A challenge references an existing *game*, and the seed is read off that row, so the caller points at a seed rather than naming one | 0026 |
 | An HTTP framework for the nine API routes | One `:param` segment and nine routes; `server/router.ts` is ~40 lines and zero dependencies | 0001, 0016 |
 | Any runtime dependency | Bundle is ours. Zero runtime deps is a standing constraint; even a dev dep needs an ADR | 0001, CLAUDE.md |
 | Browser fingerprinting to remember a player | 81.5% collision rate on a general-audience mobile population, 45.5% of fingerprints change within a day, and it is the *only* component that would need a consent banner. It fails hardest in exactly the cases the cookie already covers | 0011 |

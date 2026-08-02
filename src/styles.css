@@ -328,7 +328,10 @@ p {
   color: var(--color-muted);
 }
 
-.menu-breakdown {
+/* The per-round breakdown, shared by the summary screen and the leaderboard
+   attempt panel (src/ui/breakdown.ts). */
+.menu-breakdown,
+.breakdown {
   display: grid;
   gap: var(--space-2);
   width: min(100%, 26rem);
@@ -337,7 +340,7 @@ p {
   list-style: none;
 }
 
-.menu-round {
+.breakdown-round {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
   gap: var(--space-2);
@@ -347,7 +350,7 @@ p {
 
 /* Target and guess sit side by side so the breakdown shows *why* a round scored
    what it did, not just the number. */
-.menu-round-chip {
+.breakdown-chip {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: var(--radius-sm);
@@ -355,7 +358,7 @@ p {
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
-.menu-round-score {
+.breakdown-round-score {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
@@ -488,6 +491,122 @@ p {
   border-left: 3px solid var(--color-accent);
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   font-weight: 700;
+}
+
+/* --- Expandable rows: the attempt panel (ADR 0026) ------------------------ */
+
+/* The name cell is a toggle. A borderless button so the row still reads as a
+   row, with a caret that turns when it opens — never colour alone. */
+.leaderboard-expander {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leaderboard-caret::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--color-muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.leaderboard-expander[aria-expanded="true"] .leaderboard-caret::before {
+  transform: rotate(90deg);
+}
+
+/* The detail row's content slides open by animating the wrapper's row track from
+   0fr to 1fr. `overflow: hidden` on the panel clips it while it grows, and
+   `visibility` keeps a collapsed panel's controls out of the tab order. */
+.leaderboard-detail > td {
+  padding: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.attempt-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-base) var(--ease-out);
+}
+
+.leaderboard-detail.is-open .attempt-wrap {
+  grid-template-rows: 1fr;
+}
+
+.attempt {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-3) var(--space-2);
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.leaderboard-detail.is-open .attempt {
+  visibility: visible;
+}
+
+.attempt-total {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.attempt-status {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.attempt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.attempt-actions button,
+.leaderboard-filter button {
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* --- The seed filter banner ----------------------------------------------- */
+
+.leaderboard-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  width: min(100%, 26rem);
+}
+
+.leaderboard-filter[hidden] {
+  display: none;
+}
+
+.leaderboard-filter-label {
+  flex: 1 1 auto;
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attempt-wrap,
+  .leaderboard-caret::before {
+    transition-duration: 0ms;
+  }
 }
 
 /* --- Identity: claiming a name (ADR 0011) --------------------------------- */
