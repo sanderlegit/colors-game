@@ -15,6 +15,7 @@ blob-report/
 
 # Caches
 .vite/
+.wrangler/
 *.tsbuildinfo
 .eslintcache
 
@@ -40,3 +41,6 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+
+# Agent scratch: contains git worktrees, which must never be nested in a commit.
+.claude/

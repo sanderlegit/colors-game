@@ -14,7 +14,9 @@
       "!**/node_modules",
       "!**/playwright-report",
       "!**/test-results",
-      "!**/package-lock.json"
+      "!**/package-lock.json",
+      "!**/worker-configuration.d.ts",
+      "!**/.claude"
     ]
   },
   "formatter": {
