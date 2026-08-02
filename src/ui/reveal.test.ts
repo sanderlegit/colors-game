@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { oklchToCss } from "@/color/format";
 import { oklch } from "@/color/types";
 import type { GameState, RoundResult, Score } from "@/domain/state";
@@ -51,7 +51,7 @@ function revealed(scores: readonly Score[], roundIndex = 0): GameState {
 describe("createReveal", () => {
   it("shows the live guess during picking, with the target still hidden", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(picking());
 
     const section = must(root.querySelector<HTMLElement>(".reveal"));
@@ -76,7 +76,7 @@ describe("createReveal", () => {
 
   it("reads as waiting during memorize — no guess yet", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(stateWith({ phase: "memorize", target: TARGET, guess: GUESS }));
 
     const section = must(root.querySelector<HTMLElement>(".reveal"));
@@ -87,7 +87,7 @@ describe("createReveal", () => {
 
   it("reveals the target and marks the panel revealed on confirm", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
 
     const section = must(root.querySelector<HTMLElement>(".reveal"));
@@ -98,7 +98,7 @@ describe("createReveal", () => {
 
   it("shows your coordinates against the target's", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
 
     const you = [...root.querySelectorAll<HTMLElement>(".reveal-compare-you")].map(
@@ -114,7 +114,7 @@ describe("createReveal", () => {
 
   it("shows a hex approximation when a formatter is injected", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} }, { formatHex: () => "#abcdef" });
+    const reveal = createReveal(root, { formatHex: () => "#abcdef" });
     reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
 
     const hex = must(root.querySelector<HTMLElement>(".reveal-compare-you"));
@@ -123,7 +123,7 @@ describe("createReveal", () => {
 
   it("explains what ΔE means", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(revealed([{ deltaE: 4.25, score: 81 }]));
 
     expect(text(root, ".reveal-explain")).toContain("ΔE");
@@ -131,7 +131,7 @@ describe("createReveal", () => {
 
   it("shows the raw ΔE alongside the score", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(revealed([{ deltaE: 4.25678, score: 81.4 }]));
 
     // SPEC §6: the number the score was derived from is deliberately visible.
@@ -141,7 +141,7 @@ describe("createReveal", () => {
 
   it("breaks the ΔE down by axis and lights the dominant one", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     // TARGET (0.6, 0.15, 210) vs GUESS (0.55, 0.11, 195): hue is the largest
     // contributor, then lightness, then chroma.
     reveal.update(revealed([{ deltaE: 10.62, score: 62 }]));
@@ -163,38 +163,27 @@ describe("createReveal", () => {
 
   it("keeps the breakdown blank until the round is scored", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(picking());
 
     const values = [...root.querySelectorAll(".reveal-breakdown-value")].map((v) => v.textContent);
     expect(values).toEqual(["—", "—", "—"]);
   });
 
-  it("labels the exit by where it leads", () => {
+  it("renders the colour chips last, flush above the picker (ADR 0025)", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
+    reveal.update(picking());
 
-    reveal.update(revealed([{ deltaE: 2, score: 90 }], 0));
-    expect(text(root, ".reveal-next")).toBe("Next round");
-
-    reveal.update(revealed([{ deltaE: 2, score: 90 }], 4));
-    expect(text(root, ".reveal-next")).toBe("See summary");
-  });
-
-  it("emits onNext when the button is pressed", () => {
-    const root = mount();
-    const onNext = vi.fn();
-    const reveal = createReveal(root, { onNext });
-    reveal.update(revealed([{ deltaE: 2, score: 90 }]));
-
-    must(root.querySelector<HTMLButtonElement>(".reveal-next")).dispatchEvent(new Event("click"));
-
-    expect(onNext).toHaveBeenCalledTimes(1);
+    // The numbers stack above the guess/target swatches, so the swatches are the
+    // final child of the panel and sit directly over the picker.
+    const section = must(root.querySelector<HTMLElement>(".reveal"));
+    expect(section.lastElementChild?.classList.contains("reveal-pair")).toBe(true);
   });
 
   it("survives a reveal with no result recorded yet", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     reveal.update(revealed([]));
 
     expect(text(root, ".reveal-delta")).toBe("—");
@@ -203,7 +192,7 @@ describe("createReveal", () => {
 
   it("bails when nothing it cares about changed", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     const state = revealed([{ deltaE: 4.25, score: 81 }]);
 
     reveal.update(state);
@@ -216,7 +205,7 @@ describe("createReveal", () => {
 
   it("is idempotent", () => {
     const root = mount();
-    const reveal = createReveal(root, { onNext: () => {} });
+    const reveal = createReveal(root);
     const state = revealed([{ deltaE: 4.25, score: 81 }]);
 
     reveal.update(state);
@@ -226,16 +215,13 @@ describe("createReveal", () => {
     expect(text(root, ".reveal-delta")).toBe("4.250");
   });
 
-  it("stops listening on destroy", () => {
+  it("removes its section on destroy", () => {
     const root = mount();
-    const onNext = vi.fn();
-    const reveal = createReveal(root, { onNext });
-    const button = must(root.querySelector<HTMLButtonElement>(".reveal-next"));
+    const reveal = createReveal(root);
+    reveal.update(picking());
 
     reveal.destroy();
-    button.dispatchEvent(new Event("click"));
 
-    expect(onNext).not.toHaveBeenCalled();
     expect(root.querySelector(".reveal")).toBeNull();
   });
 });

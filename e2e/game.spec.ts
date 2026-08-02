@@ -106,7 +106,7 @@ test("swatch and side panel are both on screen without scrolling", async ({ page
 
 test("the confirm button is unavailable until the picker has been moved", async ({ page }) => {
   await playToPicking(page);
-  await expect(page.locator(".hud-confirm")).toBeDisabled();
+  await expect(page.locator(".action-confirm")).toBeDisabled();
 });
 
 test("the reveal fills its reserved place without shifting anything (ADR 0010)", async ({
@@ -124,7 +124,7 @@ test("the reveal fills its reserved place without shifting anything (ADR 0010)",
   await page.mouse.down();
   await page.mouse.move(plane.x + plane.width * 0.4, plane.y + plane.height * 0.3, { steps: 5 });
   await page.mouse.up();
-  await page.locator(".hud-confirm").click();
+  await page.locator(".action-confirm").click();
 
   // The target fills into a slot that was already there...
   await expect(page.locator(".reveal-chip--target")).toBeVisible();
@@ -161,7 +161,7 @@ test("a full round: memorize, pick, confirm, score", async ({ page }) => {
   await page.mouse.move(rect.x + rect.width * 0.35, rect.y + rect.height * 0.45, { steps: 8 });
   await page.mouse.up();
 
-  const confirm = page.locator(".hud-confirm");
+  const confirm = page.locator(".action-confirm");
   await expect(confirm).toBeEnabled();
   await confirm.click();
 
@@ -179,5 +179,5 @@ test("a full round: memorize, pick, confirm, score", async ({ page }) => {
   expect(chipStyle ?? "").toContain("oklch");
 
   await page.getByRole("button", { name: "Next round" }).click();
-  await expect(page.locator(".hud-round")).toContainText("2");
+  await expect(page.locator(".status-round")).toContainText("2");
 });

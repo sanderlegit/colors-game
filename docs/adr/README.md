@@ -33,6 +33,7 @@ the most valuable thing in here.
 | [0022](0022-workers-with-static-assets.md) | A Worker with static assets, not a Pages project | accepted |
 | [0023](0023-retention-is-a-daily-cron-sweep.md) | Retention is a daily cron sweep, and it does not release names | accepted |
 | [0024](0024-duplicate-display-names.md) | Display names are not unique; the board is ordered by (score, name, id) | accepted |
+| [0025](0025-mobile-phase-action-bar.md) | The phone screen is status · readout · picker · action bar | accepted |
 
 ## Already rejected — do not re-propose without new evidence
 

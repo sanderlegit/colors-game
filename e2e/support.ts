@@ -43,7 +43,7 @@ export async function pick(page: Page): Promise<void> {
 /** One whole round: memorize, pick, confirm. Leaves the reveal on screen. */
 export async function playRound(page: Page): Promise<void> {
   await pick(page);
-  const confirm = page.locator(".hud-confirm");
+  const confirm = page.locator(".action-confirm");
   await expect(confirm).toBeEnabled();
   await confirm.click();
   await expect(page.locator(".reveal-chip--target")).toBeVisible();

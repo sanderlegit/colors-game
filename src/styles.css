@@ -192,10 +192,12 @@ p {
      #app
        .tabs             ← createTabs(root, …)     (only between games, ADR 0013)
        .game             ← the Play tabpanel itself; no wrapper (ADR 0012)
-         .game-hud       ← createHud(root, …)
-         .game-stage     ← createSwatch(root, …)   (picker mounts into its slot)
+         .game-status    ← createStatus(root, …)   (round counter + running total)
          .game-side      ← createReveal(root, …)   (live guess + round result,
                                                     ADR 0010)
+         .game-stage     ← createSwatch(root, …)   (picker mounts into its slot)
+         .game-action    ← createAction(root, …)   (phase action bar: countdown →
+                                                    Confirm → Next round, ADR 0025)
          .game-menu      ← createMenu(root, …)     (overlays everything when
                                                     idle or at the summary; the
                                                     identity block mounts into
@@ -213,17 +215,18 @@ p {
   min-height: 100dvh;
   gap: var(--space-3);
   padding: var(--space-3);
-  /* Phones anchor to the top and put the picker at the bottom, in the thumb zone,
-     with the confirm button (in the HUD) right above it. The glanceable info —
-     the guess/target blobs and readout — sits up top. The stack is the same size
-     in every phase, so the memorize→picking geometry holds and nothing shifts on
-     reveal (ADR 0010). */
+  /* Phones read top→bottom: status · readout · picker · action bar (ADR 0025).
+     The picker sits low in the thumb zone with the guess/target chips flush above
+     it and the phase action (Confirm / Next) in a reserved slot right below. The
+     stack is the same size in every phase, so the memorize→picking geometry holds
+     and nothing shifts on reveal (ADR 0010, 0025). */
   align-content: start;
   justify-items: center;
   grid-template-areas:
+    "status"
     "side"
-    "hud"
-    "stage";
+    "stage"
+    "action";
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -235,18 +238,9 @@ p {
   display: none;
 }
 
-/* The HUD swaps a countdown for a confirm button between phases, and at phone
-   widths that reflow changed its height and pushed the stage down ~15px. The
-   player memorized a rect at a position; the picker has to appear at that same
-   position, so the HUD's box is reserved at its tallest arrangement — one
-   control row plus one line of hint — and never resized by its contents.
-   Asserted in e2e: the swatch rect is identical in memorize and picking. */
-.game-hud {
-  grid-area: hud;
-  display: grid;
-  place-items: center;
+.game-status {
+  grid-area: status;
   width: 100%;
-  min-height: calc(var(--tap-target) + 1lh + var(--space-2));
 }
 
 .game-stage {
@@ -260,13 +254,29 @@ p {
   min-height: 20vh;
 }
 
-/* SPEC §4: at 640px and up the side panel sits to the right of the swatch. */
+/* The action bar swaps a countdown for a Confirm button for a Next button between
+   phases, and any height drift between them would move the picker that sits above
+   it — the player memorized a rect at a position and the picker has to appear at
+   that same position. So its box is reserved at its tallest arrangement — one
+   control row plus one line of hint — and never resized by its contents.
+   Asserted in e2e: the swatch rect is identical in memorize and picking (ADR 0025). */
+.game-action {
+  grid-area: action;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: calc(var(--tap-target) + 1lh + var(--space-2));
+}
+
+/* SPEC §4: at 640px and up the side panel sits to the right of the swatch, with
+   the status spanning the top and the action bar spanning the bottom. */
 @media (min-width: 640px) {
   .game {
     grid-template-columns: auto minmax(15rem, 22rem);
     grid-template-areas:
-      "hud    hud"
-      "stage  side";
+      "status status"
+      "stage  side"
+      "action action";
     justify-items: stretch;
     align-items: center;
     /* There is room to breathe here, so the board can sit centred again. */
@@ -276,6 +286,11 @@ p {
        picker and the panel it is meant to be read against. */
     justify-content: center;
     column-gap: var(--space-5);
+  }
+
+  .game-status,
+  .game-action {
+    justify-self: center;
   }
 
   .game-side {
@@ -583,8 +598,38 @@ p {
   touch-action: none;
 }
 
-/* --- HUD (SPEC §3, §5.4, §8) --------------------------------------------- */
-.hud {
+/* --- Status: round counter + running total (SPEC §3, §4) ----------------- */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+}
+
+.status-round {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The running total, beside the round counter (moved out of the reveal panel,
+   ADR 0010). */
+.status-total {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.status-round[hidden],
+.status-total[hidden] {
+  display: none;
+}
+
+/* --- Action bar: countdown → Confirm → Next round (SPEC §3, §5.4, §8; ADR 0025) */
+.action {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -593,25 +638,7 @@ p {
   width: 100%;
 }
 
-.hud-round {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* The running total, beside the round counter (moved out of the reveal panel). */
-.hud-total {
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
-.hud-total[hidden] {
-  display: none;
-}
-
-.hud-countdown {
+.action-countdown {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -619,42 +646,42 @@ p {
 
 /* `display: flex` above outranks the UA `[hidden]` rule, so the countdown ring
    would otherwise stay on screen (empty) outside the memorize phase. */
-.hud-countdown[hidden] {
+.action-countdown[hidden] {
   display: none;
 }
 
-.hud-ring {
+.action-ring {
   width: var(--tap-target);
   height: var(--tap-target);
   /* Start the sweep at 12 o'clock. */
   transform: rotate(-90deg);
 }
 
-.hud-ring-track,
-.hud-ring-progress {
+.action-ring-track,
+.action-ring-progress {
   fill: none;
   stroke-width: 8;
 }
 
-.hud-ring-track {
+.action-ring-track {
   stroke: var(--color-border);
 }
 
-.hud-ring-progress {
+.action-ring-progress {
   stroke: var(--color-accent);
   stroke-linecap: round;
 }
 
 /* The numeric countdown is the accessible one and stays in every case. */
-.hud-seconds {
+.action-seconds {
   min-width: 1.5ch;
   font-family: var(--font-mono);
   font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
 }
 
-.hud-confirm,
-.reveal-next {
+.action-confirm,
+.action-next {
   min-width: var(--tap-target);
   min-height: var(--tap-target);
   padding: var(--space-2) var(--space-4);
@@ -667,8 +694,8 @@ p {
 }
 
 /* SPEC §8: never color alone. Disabled changes the border from solid to dashed
-   and is spelled out by `.hud-confirm-hint` next to it. */
-.hud-confirm:disabled {
+   and is spelled out by `.action-confirm-hint` next to it. */
+.action-confirm:disabled {
   border-style: dashed;
   border-color: var(--color-muted);
   background-color: transparent;
@@ -676,7 +703,7 @@ p {
   cursor: not-allowed;
 }
 
-.hud-confirm-hint {
+.action-confirm-hint {
   color: var(--color-muted);
   font-size: 0.875rem;
 }
@@ -709,8 +736,7 @@ p {
 .reveal-breakdown,
 .reveal-compare-head-target,
 .reveal-compare-target,
-.reveal-explain,
-.reveal-next {
+.reveal-explain {
   visibility: hidden;
 }
 
@@ -719,8 +745,7 @@ p {
 .reveal.is-revealed .reveal-breakdown,
 .reveal.is-revealed .reveal-compare-head-target,
 .reveal.is-revealed .reveal-compare-target,
-.reveal.is-revealed .reveal-explain,
-.reveal.is-revealed .reveal-next {
+.reveal.is-revealed .reveal-explain {
   visibility: visible;
 }
 
@@ -858,49 +883,52 @@ p {
   font-size: 0.8125rem;
 }
 
-/* The advance button spans the panel: an easy target, and it anchors the bottom
-   of the reserved layout so the reveal fills a place that was already there. */
-.reveal-next {
-  justify-self: stretch;
-}
-
 /* Phones: keep the panel compact so the board and the panel both fit without a
    scroll (SPEC §4). The swatches become a short strip, the stats shrink, and the
    explanatory prose is dropped — there is no room for it beside the board, and
    the numbers carry the same information. */
 @media (max-width: 639px) {
   .game {
-    gap: var(--space-1);
+    /* No row gap: the readout's colour chips sit flush above the picker so the
+       guess/target swatches can be compared against it at a glance (ADR 0025).
+       The page keeps a thin edge padding. */
+    gap: 0;
     padding: var(--space-1);
-    /* The HUD is a FIXED-height row so it is identical in every phase — a couple
-       of pixels of drift (countdown ring vs Confirm button) would move the picker
-       below it and break the memorize↔picking geometry. side is auto, the picker
-       (stage) gets all the rest, and the square fills whatever that leaves. */
-    grid-template-rows: auto 3rem 1fr;
+    /* status and side (both height-stable across phases) and the FIXED action row
+       are what keep the picker's box identical in memorize and picking — a couple
+       of pixels of drift there would move it and break the geometry. The picker
+       (stage) is `1fr` and the square fills whatever is left. */
+    grid-template-rows: auto auto 1fr calc(var(--tap-target) + var(--space-2));
   }
 
-  /* Trim the status row to a single line (the fixed row above governs its height,
-     not the base reservation). The disabled-Confirm hint is dropped here — the
-     dashed border and aria still convey it, and there is no room for a second
-     line. */
-  .game-hud {
+  /* A hair of air under the status so it is not glued to the readout below, while
+     the readout↔picker boundary stays flush. */
+  .game-status {
+    padding-bottom: var(--space-1);
+  }
+
+  /* The fixed action row governs the bar's height, not the base reservation. The
+     disabled-Confirm hint is dropped here — the dashed border and aria still
+     convey it, and there is no room for a second line. */
+  .game-action {
     min-height: 0;
   }
 
-  .hud {
+  .status,
+  .action {
     flex-wrap: nowrap;
     gap: var(--space-2);
   }
 
-  .hud-round {
+  .status-round {
     font-size: 0.95rem;
   }
 
-  .hud-total {
+  .status-total {
     font-size: 0.8rem;
   }
 
-  .hud-confirm-hint {
+  .action-confirm-hint {
     display: none;
   }
 
@@ -952,13 +980,13 @@ p {
   .swatch-fill,
   .swatch-picker-slot,
   .reveal,
-  .hud-confirm,
-  .reveal-next {
+  .action-confirm,
+  .action-next {
     transition-duration: 0ms !important;
   }
 
   /* The ring is the animation; the numeric countdown carries the information. */
-  .hud-ring {
+  .action-ring {
     display: none !important;
   }
 }
