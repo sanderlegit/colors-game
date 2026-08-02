@@ -42,7 +42,7 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 | `idle`     | Title, "Play" button, best score                                                       | `START`             |
 | `memorize` | Swatch filled with the target color + a 5s countdown ring. Preview panel is empty/dim | timer reaches 0     |
 | `picking`  | Swatch area cross-faded into the picker; preview panel shows the live guess; Confirm   | `CONFIRM`           |
-| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, your-vs-target coords (ADR 0009) | `NEXT`              |
+| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, per-axis ΔE breakdown, your-vs-target coords (ADR 0009) | `NEXT`              |
 | `summary`  | Per-round breakdown, total score, best-ever, replay + share-seed                        | `RESTART`           |
 
 - **Rounds per game: 5.** Long enough to smooth out luck, short enough for one sitting.
@@ -143,6 +143,12 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
   your-vs-target coordinates spelled out (ADR 0009). This is a learning aid, not
   a scoring change, and it appears only once the round is over: nothing about the
   target reaches the DOM during `picking` (§9.4 holds).
+- The reveal **breaks the ΔE down by axis** — lightness / chroma / hue — and
+  lights the one that cost the most, and draws the lightness gap as a segment on
+  the bar. Because the plane carries hue and chroma but not lightness, a guess can
+  sit on the target reticle and still lose the round on lightness alone; the
+  breakdown names why. It is recomputed from the two colours for display only
+  (`ciede2000Components`), never fed back into the score.
 - Game score = sum of round scores (max 500).
 
 Scoring invariants, enforced as property tests (§9.2):

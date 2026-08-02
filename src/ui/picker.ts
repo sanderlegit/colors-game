@@ -62,10 +62,23 @@ export type Rect = {
  */
 export const HUE_NUDGE_DEG = 0.5;
 
-/** One arrow along the plane's y axis — ~1/400th of the chroma fraction range. */
-export const CHROMA_FRACTION_NUDGE = 0.0025;
+/**
+ * One arrow along the plane's y axis. Sized for **equal ΔE per keypress**, not
+ * for equal screen travel: at a mid-plane reference a fraction step of 0.0025 (an
+ * even 1/400th of the axis) moved only ~0.06 ΔE00, roughly a quarter of what the
+ * hue and lightness arrows moved, so a player correcting chroma by keyboard paid
+ * ~4× the keystrokes for the same perceptual gain. 0.01 brings it in line (~0.22
+ * ΔE00, matching `HUE_NUDGE_DEG` and `LIGHTNESS_NUDGE`). It is still sub-two-pixel
+ * on the plane. The x/y *pointer* gains stay un-warped — that is the axis warp,
+ * left to its own change.
+ */
+export const CHROMA_FRACTION_NUDGE = 0.01;
 
-/** One arrow along the lightness bar. Full width, so this is again sub-pixel. */
+/**
+ * One arrow along the lightness bar. Already ΔE-matched to the hue arrow at ~0.25
+ * ΔE00 per press — lightness is the *most* ΔE-sensitive axis per unit of its own
+ * 0..1 control, not the least, so this stays fine, near a pixel at a 450px bar.
+ */
 export const LIGHTNESS_NUDGE = 0.0025;
 
 /** SPEC §8: shift is the coarse modifier, ×10 on both surfaces. */
@@ -405,11 +418,17 @@ export function createPicker(
   bar.setAttribute("aria-valuenow", "0.5");
 
   const barTrack = element("div", "picker-lightness-track");
+  // The lightness error, drawn on the bar the way the diff line is drawn on the
+  // plane: a large ΔL sits off-plane, so without this the reveal's plane reticles
+  // can look adjacent while the score reflects a gap only the bar shows (ADR 0009).
+  const barDiff = element("div", "picker-lightness-diff");
+  barDiff.hidden = true;
+  barDiff.setAttribute("aria-hidden", "true");
   const barThumb = element("div", "picker-lightness-thumb");
   const barTargetThumb = element("div", "picker-lightness-target");
   barTargetThumb.hidden = true;
   barTargetThumb.setAttribute("aria-hidden", "true");
-  bar.append(barTrack, barThumb, barTargetThumb);
+  bar.append(barTrack, barDiff, barThumb, barTargetThumb);
 
   root.append(plane, bar);
   slot.append(root);
@@ -555,6 +574,12 @@ export function createPicker(
     barTargetThumb.style.left = `${(clamp01(target.L) * 100).toFixed(3)}%`;
     barTargetThumb.hidden = false;
 
+    const guessL = clamp01(current.L);
+    const targetL = clamp01(target.L);
+    barDiff.style.left = `${(Math.min(guessL, targetL) * 100).toFixed(3)}%`;
+    barDiff.style.width = `${(Math.abs(targetL - guessL) * 100).toFixed(3)}%`;
+    barDiff.hidden = false;
+
     const from = planeFraction(planePointForColor(current));
     diffLine.setAttribute("x1", (from.x * 100).toFixed(3));
     diffLine.setAttribute("y1", (from.y * 100).toFixed(3));
@@ -567,6 +592,7 @@ export function createPicker(
     targetMarker.hidden = true;
     setFillColor(targetMarker, "");
     barTargetThumb.hidden = true;
+    barDiff.hidden = true;
     diff.style.display = "none";
   }
 

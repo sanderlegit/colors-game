@@ -741,6 +741,12 @@ describe("createPicker", () => {
     expect(barTarget.hidden).toBe(false);
     expect(barTarget.style.left).toBe("60.000%");
 
+    // The diff segment spans guess.L → target.L, mirroring the plane's diff line.
+    const barDiff = must(slot.querySelector<HTMLElement>(".picker-lightness-diff"));
+    expect(barDiff.hidden).toBe(false);
+    expect(barDiff.style.left).toBe("40.000%");
+    expect(barDiff.style.width).toBe("20.000%");
+
     // The connector runs guess → target.
     expect(line.getAttribute("x1")).toBe("25.000");
     expect(line.getAttribute("y1")).toBe("75.000");
@@ -753,18 +759,22 @@ describe("createPicker", () => {
     const target = planePointToOklch({ h: 180, t: 0.5 }, 0.6);
     const marker = must(slot.querySelector<HTMLElement>(".picker-target"));
 
+    const barDiff = must(slot.querySelector<HTMLElement>(".picker-lightness-diff"));
+
     // SPEC §9.4: nothing about the target may be in the DOM while the player guesses.
     picker.update(picking(START));
     expect(marker.hidden).toBe(true);
     expect(marker.style.getPropertyValue("--fill-color")).toBe("");
+    expect(barDiff.hidden).toBe(true);
 
     picker.update(stateWith({ phase: "reveal", guess: START, target }));
     expect(marker.hidden).toBe(false);
 
-    // Back to picking (next round): the reticle and its colour are gone again.
+    // Back to picking (next round): the reticle and the diff segment are gone again.
     picker.update(picking(START));
     expect(marker.hidden).toBe(true);
     expect(marker.style.getPropertyValue("--fill-color")).toBe("");
+    expect(barDiff.hidden).toBe(true);
   });
 
   it("removes its nodes and stops listening on destroy", () => {
