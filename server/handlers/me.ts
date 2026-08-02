@@ -17,17 +17,13 @@
  * this response reads `last_seen_at`, so making the player wait for it would buy
  * nothing. It is what `players_idle` is for.
  *
- * ## `DELETE /api/me`
- *
- * 204 always, whether or not the cookie named anyone: telling an unauthenticated
- * caller which tokens exist is an oracle. Deletes the player and their games
- * (`Repo.deletePlayer`) and returns the clearing cookie from `http/cookie.ts`,
- * whose attributes must match the ones the cookie was set with or the browser
- * keeps it.
+ * There is no delete endpoint. A player renames in the app (`POST /api/name`)
+ * but cannot delete themselves; deletion is an operator action run out of band
+ * (`just delete-player`, ADR 0025). So identity here is read-only apart from the
+ * `waitUntil` touch — the only writes are the name set and the score submission.
  */
 
 import type { Handler, RequestContext } from "../context";
-import { clearCookie, IDENTITY_COOKIE } from "../http/cookie";
 import { jsonResponse, noContent } from "../http/json";
 import { currentPlayer, rankOf } from "../identity";
 
@@ -53,12 +49,4 @@ export const getMe: Handler = async (context: RequestContext): Promise<Response>
     gamesPlayed: player.gamesPlayed,
     rank,
   });
-};
-
-export const forgetMe: Handler = async (context: RequestContext): Promise<Response> => {
-  const player = await currentPlayer(context);
-  if (player !== null) await context.repo.deletePlayer(player.id);
-  // The clearing cookie goes out either way: a browser holding a token for a
-  // player who is already gone should still drop it.
-  return noContent({ "set-cookie": clearCookie(IDENTITY_COOKIE) });
 };

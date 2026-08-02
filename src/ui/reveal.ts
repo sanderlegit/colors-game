@@ -11,7 +11,7 @@
  *
  * The panel reads numbers-first, colour-chips-last: on phones it sits directly
  * above the picker, so the guess/target swatches land flush against it for an
- * at-a-glance comparison, with the readout stacked above (ADR 0025). Advancing to
+ * at-a-glance comparison, with the readout stacked above (ADR 0026). Advancing to
  * the next round is the phase action and lives in the bottom bar
  * (`src/ui/action.ts`), not here.
  *
@@ -213,7 +213,7 @@ export function createReveal(root: HTMLElement, options: RevealOptions = {}): Re
 
   // Numbers first, colour chips last: on phones the panel sits directly above the
   // picker, so the guess/target swatches land flush against it for an at-a-glance
-  // comparison, with the readout stacked above them (ADR 0025). Advancing is the
+  // comparison, with the readout stacked above them (ADR 0026). Advancing is the
   // phase action and lives in the bottom bar (`src/ui/action.ts`), not here.
   section.append(stats, breakdown, compare, explain, pair);
   root.append(section);

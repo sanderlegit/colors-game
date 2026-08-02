@@ -91,10 +91,40 @@ dev:
 migrate:
     npm run migrate:local
 
-# The fix for a name claim that fails because an earlier run already took it.
+# A clean slate when a local run has left rows that confuse the next one.
 [doc("Wipe the local D1 and re-migrate it.")]
 reset:
     npm run d1:reset
+
+# The one way a player comes off the board: there is no self-serve delete in the
+# app (ADR 0025), so removing a name is an operator action. Lists players,
+# fzf-picks one, and deletes them and their games from D1 — the same two-statement
+# shape `Repo.deletePlayer` uses. Defaults to the local database; pass `remote`
+# for production, which still makes you re-type the id first.
+[doc("fzf-pick a player and delete them (and their games) from D1. Pass `remote` for production.")]
+delete-player env="local":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v fzf >/dev/null || { echo "fzf is not installed (e.g. brew install fzf)"; exit 1; }
+
+    rows="$(npx wrangler d1 execute colors --{{ env }} --json --command \
+      'SELECT id, name, best_score, games_played, created_at FROM players ORDER BY id')"
+
+    pick="$(printf '%s' "$rows" | node scripts/players-table.mjs \
+      | fzf --prompt='delete > ' \
+            --header=$'    id  score games  created     name\n(enter to select, esc to cancel)')" \
+      || { echo "cancelled"; exit 0; }
+
+    id="$(printf '%s' "$pick" | awk '{print $1}')"
+    [[ "$id" =~ ^[0-9]+$ ]] || { echo "could not read an id from the selection"; exit 1; }
+
+    printf 'About to delete player %s and all their games from the %s database.\n' "$id" "{{ env }}"
+    read -r -p "Re-type the id to confirm: " confirm
+    [ "$confirm" = "$id" ] || { echo "id did not match; nothing deleted"; exit 1; }
+
+    npx wrangler d1 execute colors --{{ env }} --command \
+      "DELETE FROM games WHERE player_id = $id; DELETE FROM players WHERE id = $id"
+    echo "deleted player $id"
 
 # HTTPS on loopback, because `just tailnet` needs it and a dev/tailnet split in
 # the one place origins matter is something you find out about too late

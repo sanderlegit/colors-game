@@ -58,7 +58,6 @@ describe("response hygiene", () => {
         }),
       ],
       ["missing", await client.send("POST", "/api/games/nope/result", { body: { guesses: [] } })],
-      ["forget", await client.send("DELETE", "/api/me")],
     ];
 
     for (const [label, response] of responses) {

@@ -71,8 +71,11 @@ describe("routing", () => {
   });
 
   it("lists every method a path accepts in Allow", async () => {
+    // `/api/me` is GET-only now that self-serve delete is gone (ADR 0025); the
+    // multi-method join is covered against the router's own fixture in
+    // `router.test.ts`.
     const response = await send("PUT", "/api/me", fromSite);
-    expect(response.headers.get("allow")).toBe("GET, DELETE");
+    expect(response.headers.get("allow")).toBe("GET");
   });
 });
 
@@ -110,13 +113,12 @@ describe("the endpoint table", () => {
     const answers = await Promise.all([
       client.send("GET", "/api/health"),
       client.send("GET", "/api/me"),
-      client.send("DELETE", "/api/me"),
       client.send("POST", "/api/games", { body: { memorizeMs: 5000 } }),
       client.send("POST", "/api/games/nope/result", { body: { guesses: [] } }),
       client.send("POST", "/api/name", { body: { name: "ada" } }),
       client.send("GET", "/api/leaderboard"),
     ]);
-    expect(answers.map((response) => response.status)).toEqual([200, 204, 204, 201, 422, 401, 200]);
+    expect(answers.map((response) => response.status)).toEqual([200, 204, 201, 422, 401, 200]);
   });
 });
 

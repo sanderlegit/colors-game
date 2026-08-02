@@ -2,6 +2,11 @@
 
 Date: 2026-08-02 · Status: accepted
 
+> **Two consequences below are superseded.** Names **no longer auto-suffix** on
+> collision — they are not unique at all (ADR 0024). And **"Forget me" is gone**:
+> there is no self-serve delete; a player renames in place and deletion is an
+> operator action (ADR 0025). The cookie-identity decision itself stands.
+
 ## Context
 
 A leaderboard needs a name, and names have to survive a reload or they are just

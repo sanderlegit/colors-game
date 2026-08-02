@@ -6,7 +6,7 @@
  * Confirm, Next round) lives in `src/ui/action.ts` at the bottom of the screen,
  * so this row is one constant line of text. That constancy is load-bearing: it
  * sits above the picker, and anything above the picker that changes height
- * between phases moves the memorized rect out from under the picker (ADR 0025).
+ * between phases moves the memorized rect out from under the picker (ADR 0026).
  *
  * The running total lives here beside the round counter rather than in the reveal
  * panel — it is game-wide status, not a per-round result (ADR 0010).

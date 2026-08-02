@@ -197,7 +197,7 @@ p {
                                                     ADR 0010)
          .game-stage     ← createSwatch(root, …)   (picker mounts into its slot)
          .game-action    ← createAction(root, …)   (phase action bar: countdown →
-                                                    Confirm → Next round, ADR 0025)
+                                                    Confirm → Next round, ADR 0026)
          .game-menu      ← createMenu(root, …)     (overlays everything when
                                                     idle or at the summary; the
                                                     identity block mounts into
@@ -215,11 +215,11 @@ p {
   min-height: 100dvh;
   gap: var(--space-3);
   padding: var(--space-3);
-  /* Phones read top→bottom: status · readout · picker · action bar (ADR 0025).
+  /* Phones read top→bottom: status · readout · picker · action bar (ADR 0026).
      The picker sits low in the thumb zone with the guess/target chips flush above
      it and the phase action (Confirm / Next) in a reserved slot right below. The
      stack is the same size in every phase, so the memorize→picking geometry holds
-     and nothing shifts on reveal (ADR 0010, 0025). */
+     and nothing shifts on reveal (ADR 0010, 0026). */
   align-content: start;
   justify-items: center;
   grid-template-areas:
@@ -259,7 +259,7 @@ p {
    it — the player memorized a rect at a position and the picker has to appear at
    that same position. So its box is reserved at its tallest arrangement — one
    control row plus one line of hint — and never resized by its contents.
-   Asserted in e2e: the swatch rect is identical in memorize and picking (ADR 0025). */
+   Asserted in e2e: the swatch rect is identical in memorize and picking (ADR 0026). */
 .game-action {
   grid-area: action;
   display: grid;
@@ -551,18 +551,21 @@ p {
 }
 
 .identity-claim,
-.identity-forget {
+.identity-cancel {
   min-height: var(--tap-target);
   padding: 0 var(--space-3);
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
-/* The armed half of the two-click confirm. Not colour alone — the label itself
-   changes to "Really forget me?" (ADR 0011). */
-.identity-forget.is-armed {
-  border-color: var(--color-target);
-  color: var(--color-target);
+/* "Change name" sits inline after "Playing as …", so it reads as a secondary
+   control rather than a second primary button (ADR 0025). */
+.identity-rename {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
 }
 
 /* --- The shared rect (SPEC §2.1, ARCHITECTURE § "The dissolve") ----------- */
@@ -628,7 +631,7 @@ p {
   display: none;
 }
 
-/* --- Action bar: countdown → Confirm → Next round (SPEC §3, §5.4, §8; ADR 0025) */
+/* --- Action bar: countdown → Confirm → Next round (SPEC §3, §5.4, §8; ADR 0026) */
 .action {
   display: flex;
   flex-wrap: wrap;
@@ -890,7 +893,7 @@ p {
 @media (max-width: 639px) {
   .game {
     /* No row gap: the readout's colour chips sit flush above the picker so the
-       guess/target swatches can be compared against it at a glance (ADR 0025).
+       guess/target swatches can be compared against it at a glance (ADR 0026).
        The page keeps a thin edge padding. */
     gap: 0;
     padding: var(--space-1);

@@ -62,7 +62,7 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   const game = document.createElement("div");
   game.className = "game";
 
-  // Region order top→bottom (ADR 0025): status · readout · picker · action bar.
+  // Region order top→bottom (ADR 0026): status · readout · picker · action bar.
   // The menu overlays everything (`display: contents`), so its DOM position is
   // free.
   const statusRegion = region(game, "game-status");
@@ -89,7 +89,7 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   );
 
   // The phase action bar: countdown while memorizing, Confirm while picking, Next
-  // round on reveal — one reserved slot at the bottom, in the thumb zone (ADR 0025).
+  // round on reveal — one reserved slot at the bottom, in the thumb zone (ADR 0026).
   const action = createAction(
     actionRegion,
     {

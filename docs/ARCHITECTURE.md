@@ -58,16 +58,16 @@ src/
                       (keeps the picker visible through reveal, ADR 0009)
     picker.ts         hue x chroma plane (canvas) + lightness bar (ADR 0007);
                       reveal-only target reticle + guess-to-target gap (ADR 0009)
-    status.ts         the top row: round counter + running total (ADR 0025)
-    action.ts         the bottom phase action bar (ADR 0025): countdown while
+    status.ts         the top row: round counter + running total (ADR 0026)
+    action.ts         the bottom phase action bar (ADR 0026): countdown while
                       memorizing, Confirm while picking, Next round on reveal —
                       one reserved slot, in the thumb zone. Split out of hud.ts
     reveal.ts         the persistent side panel (ADR 0010): live guess while
                       picking, then ΔE, score, your-vs-target coords. Numbers
                       stack above the guess/target chips, which sit flush over the
-                      picker on phones (ADR 0025). Replaced preview.ts, deleted
+                      picker on phones (ADR 0026). Replaced preview.ts, deleted
     menu.ts           idle + summary screen; owns the identity block's mount slot
-    identity.ts       set-username form, two-click "forget me" (ADR 0011, 0024)
+    identity.ts       set-username + "Change name" rename form (ADR 0011, 0024, 0025)
     leaderboard.ts    the board. setView(view), never update(state) (ADR 0012)
     tabs.ts           ARIA tablist, roving tabindex, automatic activation
     render.ts         createGameView(root, deps) -> { update(state), … }

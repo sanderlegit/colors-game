@@ -170,7 +170,7 @@ describe("createReveal", () => {
     expect(values).toEqual(["—", "—", "—"]);
   });
 
-  it("renders the colour chips last, flush above the picker (ADR 0025)", () => {
+  it("renders the colour chips last, flush above the picker (ADR 0026)", () => {
     const root = mount();
     const reveal = createReveal(root);
     reveal.update(picking());

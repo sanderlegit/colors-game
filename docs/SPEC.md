@@ -70,7 +70,7 @@ Two regions, always both visible, never requiring a scroll:
 - **≥ 640px wide:** preview sits to the right of the swatch, as specified, with the
   round/total status spanning the top and the phase action bar spanning the bottom.
 - **< 640px (portrait phones):** the screen reads top→bottom as **status → readout →
-  swatch/picker → action bar** (ADR 0025). The round counter and running total pin
+  swatch/picker → action bar** (ADR 0026). The round counter and running total pin
   the top; the readout (preview) sits *above* the picker with its guess/target
   colour chips flush against it, so the painted colour is compared to the swatch by
   eye; the numbers (ΔE, score, the per-axis breakdown, the You/Target coordinates)
@@ -78,7 +78,7 @@ Two regions, always both visible, never requiring a scroll:
   simultaneously — a layout constraint, not a suggestion. Verified in e2e at iPhone
   14 viewport.
 - **The phase action lives in one reserved slot at the bottom, in the thumb zone**
-  (ADR 0025): the memorize countdown, then Confirm, then Next round — exactly one at
+  (ADR 0026): the memorize countdown, then Confirm, then Next round — exactly one at
   a time. Its box is reserved at a fixed height so the picker above it never moves as
   the control changes (the memorize↔picking swatch rect is asserted identical).
 - The swatch is a fixed aspect ratio (1:1) sized by `min(70vw, 50vh)` so it never
@@ -219,11 +219,14 @@ first-party cookie the server sets (ADR 0011):
 - **Names are not unique** (ADR 0024). The name you set is the name you get; two
   players sharing a name is an ordinary outcome, and the board keeps them apart
   and stably ordered by account age.
+- **You can change your name whenever** (ADR 0025). "Change name" reopens the
+  form pre-filled; setting a new name overwrites the old one and keeps your
+  scores and board position — a rename is not a new identity.
 - **Lose the cookie, lose the name.** Cleared storage, a private window or a
   second device is a fresh identity. There is no recovery code, by decision.
-- **"Forget me" is a real delete**, behind a two-click confirm (the button
-  relabels and reverts on blur). Never `window.confirm`, which blocks the frame
-  loop the whole game runs on.
+- **There is no "forget me" in the app** (ADR 0025). A player cannot delete
+  themselves; deletion is a rare operator action (`just delete-player`), so a
+  data-removal request goes to whoever runs the stack rather than through a button.
 - The client validates only that a name is non-empty after trimming and within
   `MAX_NAME_LENGTH`. Every other rule is the server's and its verdict is rendered
   verbatim — a client that mirrors the server's rules starts refusing names the
