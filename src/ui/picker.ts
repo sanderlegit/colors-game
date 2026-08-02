@@ -6,9 +6,12 @@
  * back into bugs:
  *
  * 1. **The plane shows every hue at once.** x is hue over the full 0..360°, y is
- *    the chroma fraction `t` — most saturated at the top, neutral grey at the
- *    bottom. A player who has just memorised a colour begins by *finding* it,
- *    and with hue behind a slider it is not on screen to be found.
+ *    chroma — most saturated at the top, neutral grey at the bottom. A player who
+ *    has just memorised a colour begins by *finding* it, and with hue behind a
+ *    slider it is not on screen to be found. The y axis is not linear in the
+ *    chroma fraction `t`: it is *perceptually warped* (`CHROMA_WARP`) so that
+ *    equal vertical travel is roughly equal ΔE, because a linear chroma axis
+ *    crams half the grey→vivid perceptual range into its bottom quarter.
  * 2. **Chroma is a fraction of what the gamut offers, so the whole plane is
  *    displayable.** `C = t · maxChroma(L, h)`, the same construction
  *    `generateTarget` uses. There is no out-of-gamut region to render inert and
@@ -63,16 +66,32 @@ export type Rect = {
 export const HUE_NUDGE_DEG = 0.5;
 
 /**
- * One arrow along the plane's y axis. Sized for **equal ΔE per keypress**, not
- * for equal screen travel: at a mid-plane reference a fraction step of 0.0025 (an
- * even 1/400th of the axis) moved only ~0.06 ΔE00, roughly a quarter of what the
- * hue and lightness arrows moved, so a player correcting chroma by keyboard paid
- * ~4× the keystrokes for the same perceptual gain. 0.01 brings it in line (~0.22
- * ΔE00, matching `HUE_NUDGE_DEG` and `LIGHTNESS_NUDGE`). It is still sub-two-pixel
- * on the plane. The x/y *pointer* gains stay un-warped — that is the axis warp,
- * left to its own change.
+ * Curvature of the plane's y-axis warp (ADR 0007 / TUNING § Picker feel).
+ *
+ * The y axis is *screen* fraction, not chroma fraction. A linear chroma axis is
+ * badly front-loaded perceptually: measured grey→vivid, the bottom quarter of the
+ * axis holds ~half the total ΔE00, so near-grey a pixel moves ~3× the ΔE it does
+ * near full chroma. The warp `t = ((1+β)^s − 1)/β` (with `s` the screen fraction,
+ * 0 grey → 1 vivid) spends screen space in proportion to perceptual distance
+ * instead. `β = 8` was fit to the measured cumulative ΔE curve, hue-averaged —
+ * `s = ¼, ½, ¾` lands at t ≈ 0.09, 0.25, 0.53, matching the measured 50/73/88%.
+ *
+ * It is hue-independent on purpose: the exact curve varies a little per hue, but a
+ * per-column warp would break "a row is one chroma level" and cost a ΔE bisection
+ * per rendered pixel. The approximation captures nearly all of the evenness.
  */
-export const CHROMA_FRACTION_NUDGE = 0.01;
+export const CHROMA_WARP = 8;
+const CHROMA_WARP_LOG = Math.log(1 + CHROMA_WARP);
+
+/**
+ * One arrow along the plane's y axis, **in screen space**. Because the warp makes
+ * ΔE00 roughly linear in the screen fraction, a constant screen step is a constant
+ * ΔE step everywhere on the axis — ~0.2–0.3 ΔE00 per press, matching
+ * `HUE_NUDGE_DEG` and `LIGHTNESS_NUDGE`. (This supersedes Phase 1's
+ * `CHROMA_FRACTION_NUDGE`, which stepped chroma fraction directly and so moved
+ * different ΔE at the top and bottom of the axis.)
+ */
+export const CHROMA_SCREEN_NUDGE = 0.01;
 
 /**
  * One arrow along the lightness bar. Already ΔE-matched to the hue arrow at ~0.25
@@ -87,6 +106,19 @@ export const COARSE_MULTIPLIER = 10;
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+/**
+ * Screen fraction `s` (0 grey → 1 vivid) → chroma fraction `t`. The plane's
+ * vertical warp (see `CHROMA_WARP`); the inverse of `screenFromChromaFraction`.
+ */
+export function chromaFractionFromScreen(s: number): number {
+  return ((1 + CHROMA_WARP) ** clamp01(s) - 1) / CHROMA_WARP;
+}
+
+/** Chroma fraction `t` → screen fraction `s`. Inverse of `chromaFractionFromScreen`. */
+export function screenFromChromaFraction(t: number): number {
+  return Math.log(1 + CHROMA_WARP * clamp01(t)) / CHROMA_WARP_LOG;
 }
 
 /** Degrees in `[0, 360)`. */
@@ -106,7 +138,7 @@ export function wrapHue(degrees: number): number {
 export function planePointFromPointer(x: number, y: number, rect: Rect): PlanePoint {
   const across = rect.width > 0 ? (x - rect.left) / rect.width : 0;
   const down = rect.height > 0 ? (y - rect.top) / rect.height : 1;
-  return { h: wrapHue(clamp01(across) * 360), t: clamp01(1 - down) };
+  return { h: wrapHue(clamp01(across) * 360), t: chromaFractionFromScreen(1 - down) };
 }
 
 /** Plane position plus a lightness → the colour it names. Always in gamut. */
@@ -128,7 +160,7 @@ export function planePointForColor(color: Oklch): PlanePoint {
 
 /** Plane position → its fraction of the plane's box, for placing the cursor. */
 export function planeFraction(point: PlanePoint): PlaneFraction {
-  return { x: wrapHue(point.h) / 360, y: 1 - clamp01(point.t) };
+  return { x: wrapHue(point.h) / 360, y: 1 - screenFromChromaFraction(point.t) };
 }
 
 /** Pointer client X → lightness. The bar runs dim (0) to bright (1). */
@@ -167,14 +199,16 @@ function sameColor(a: Oklch, b: Oklch): boolean {
  */
 export function nudgeInPlane(guess: Oklch, key: string, coarse: boolean): Oklch | null {
   const horizontal = isHorizontal(key);
-  const unit = horizontal ? HUE_NUDGE_DEG : CHROMA_FRACTION_NUDGE;
+  const unit = horizontal ? HUE_NUDGE_DEG : CHROMA_SCREEN_NUDGE;
   const delta = stepFor(key, unit * (coarse ? COARSE_MULTIPLIER : 1));
   if (delta === null) return null;
 
   const point = planePointForColor(guess);
+  // Vertical arrows step in *screen* space, then map back through the warp, so a
+  // press moves the same ΔE at the grey floor and the vivid top.
   const moved: PlanePoint = horizontal
     ? { h: wrapHue(point.h + delta), t: point.t }
-    : { h: point.h, t: clamp01(point.t + delta) };
+    : { h: point.h, t: chromaFractionFromScreen(screenFromChromaFraction(point.t) + delta) };
 
   const next = planePointToOklch(moved, guess.L);
   return sameColor(next, guess) ? null : next;
@@ -245,7 +279,8 @@ export function renderPlanePixels(
 
     for (let blockY = 0; blockY < height; blockY += step) {
       const rowEnd = Math.min(blockY + step, height);
-      const t = 1 - Math.min(blockY + step / 2, height) / height;
+      const s = 1 - Math.min(blockY + step / 2, height) / height;
+      const t = chromaFractionFromScreen(s);
       const sample = oklchToSrgb(oklch(L, t * ceiling, h));
       const r = sample.r * 255;
       const g = sample.g * 255;

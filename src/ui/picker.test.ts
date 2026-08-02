@@ -1,14 +1,16 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { oklchToSrgb } from "@/color/convert";
+import { oklchToLab, oklchToSrgb } from "@/color/convert";
+import { ciede2000 } from "@/color/deltaE";
 import { oklchToCss } from "@/color/format";
 import { isInGamut, maxChroma } from "@/color/gamut";
 import { type Oklch, oklch } from "@/color/types";
 import type { GameState } from "@/domain/state";
 import { initialState } from "@/domain/state";
 import {
-  CHROMA_FRACTION_NUDGE,
+  CHROMA_SCREEN_NUDGE,
   COARSE_MULTIPLIER,
+  chromaFractionFromScreen,
   createPicker,
   DRAFT_SAMPLES,
   FINAL_SAMPLES,
@@ -26,6 +28,7 @@ import {
   planePointToOklch,
   type Rect,
   renderPlanePixels,
+  screenFromChromaFraction,
   wrapHue,
 } from "@/ui/picker";
 import type { PickerFactory } from "@/ui/render";
@@ -47,10 +50,15 @@ describe("wrapHue", () => {
 });
 
 describe("planePointFromPointer", () => {
-  it("puts hue on x and the chroma fraction on y, saturated at the top", () => {
+  it("puts hue on x and the warped chroma fraction on y, saturated at the top", () => {
     expect(planePointFromPointer(0, 200, RECT)).toEqual({ h: 0, t: 0 });
     expect(planePointFromPointer(150, 0, RECT)).toEqual({ h: 180, t: 1 });
-    expect(planePointFromPointer(75, 100, RECT)).toEqual({ h: 90, t: 0.5 });
+    // Mid-screen is *below* mid-chroma: the y axis is perceptually warped
+    // (CHROMA_WARP), so half-way up the plane sits at t ≈ 0.25.
+    expect(planePointFromPointer(75, 100, RECT)).toEqual({
+      h: 90,
+      t: chromaFractionFromScreen(0.5),
+    });
   });
 
   it("wraps the right edge onto the left — the hue axis is a circle", () => {
@@ -59,7 +67,10 @@ describe("planePointFromPointer", () => {
 
   it("honours the rect origin and clamps outside it", () => {
     const offset: Rect = { left: 40, top: 10, width: 300, height: 200 };
-    expect(planePointFromPointer(190, 110, offset)).toEqual({ h: 180, t: 0.5 });
+    expect(planePointFromPointer(190, 110, offset)).toEqual({
+      h: 180,
+      t: chromaFractionFromScreen(0.5),
+    });
     expect(planePointFromPointer(-100, 999, offset)).toEqual({ h: 0, t: 0 });
     expect(planePointFromPointer(9999, -999, offset)).toEqual({ h: 0, t: 1 });
   });
@@ -161,11 +172,64 @@ describe("the plane is in gamut everywhere (ADR 0007)", () => {
   });
 });
 
+describe("chroma-axis warp", () => {
+  it("pins the ends and round-trips screen ↔ chroma fraction", () => {
+    expect(chromaFractionFromScreen(0)).toBe(0);
+    expect(chromaFractionFromScreen(1)).toBe(1);
+    fc.assert(
+      fc.property(fc.double({ min: 0, max: 1, noNaN: true }), (s) => {
+        expect(screenFromChromaFraction(chromaFractionFromScreen(s))).toBeCloseTo(s, 10);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("is front-loaded: half-way up the screen is a quarter of max chroma", () => {
+    // The whole point — the perceptually dense low-chroma region gets more of the
+    // axis, so mid-screen sits well below mid-chroma.
+    expect(chromaFractionFromScreen(0.5)).toBeCloseTo(0.25, 10);
+    expect(chromaFractionFromScreen(0.5)).toBeLessThan(0.5);
+  });
+
+  it("is monotonic increasing", () => {
+    let prev = -1;
+    for (let s = 0; s <= 1.0001; s += 0.05) {
+      const t = chromaFractionFromScreen(s);
+      expect(t).toBeGreaterThan(prev);
+      prev = t;
+    }
+  });
+
+  it("makes equal screen steps more ΔE-even than equal chroma-fraction steps", () => {
+    const L = 0.6;
+    const step = 0.02;
+    const spread = (deltas: readonly number[]): number => Math.max(...deltas) / Math.min(...deltas);
+    for (const h of [30, 210]) {
+      const c = maxChroma(L, h);
+      const stops = [0.1, 0.3, 0.5, 0.7, 0.9];
+      const warped = stops.map((s) => {
+        const a = oklchToLab(oklch(L, chromaFractionFromScreen(s) * c, h));
+        const b = oklchToLab(oklch(L, chromaFractionFromScreen(s + step) * c, h));
+        return ciede2000(a, b);
+      });
+      const linear = stops.map((t) =>
+        ciede2000(oklchToLab(oklch(L, t * c, h)), oklchToLab(oklch(L, (t + step) * c, h))),
+      );
+      expect(spread(warped)).toBeLessThan(spread(linear));
+      expect(spread(warped)).toBeLessThan(2.2);
+    }
+  });
+});
+
 describe("planeFraction", () => {
   it("places hue across the width and t upward from the bottom", () => {
     expect(planeFraction({ h: 0, t: 0 })).toEqual({ x: 0, y: 1 });
     expect(planeFraction({ h: 180, t: 1 })).toEqual({ x: 0.5, y: 0 });
-    expect(planeFraction({ h: 90, t: 0.25 })).toEqual({ x: 0.25, y: 0.75 });
+    // t = 0.25 is a quarter of max chroma but sits at mid-height, because the
+    // y axis is warped (CHROMA_WARP): the bottom half of the plane is low chroma.
+    const quarter = planeFraction({ h: 90, t: 0.25 });
+    expect(quarter.x).toBe(0.25);
+    expect(quarter.y).toBeCloseTo(0.5, 10);
   });
 
   it("inverts planePointFromPointer on the unit rect", () => {
@@ -229,12 +293,21 @@ describe("nudgeInPlane", () => {
     expect(next.h).toBeCloseTo(0.3, 8);
   });
 
-  it("moves the chroma fraction on the vertical arrows", () => {
+  it("moves a constant screen step on the vertical arrows (the warp)", () => {
     const up = nudgeInPlane(base, "ArrowUp", false);
     const down = nudgeInPlane(base, "ArrowDown", false);
     if (up === null || down === null) throw new Error("expected a move");
-    expect(planePointForColor(up).t).toBeCloseTo(0.5 + CHROMA_FRACTION_NUDGE, 8);
-    expect(planePointForColor(down).t).toBeCloseTo(0.5 - CHROMA_FRACTION_NUDGE, 8);
+    // The nudge steps *screen* space, not chroma fraction, so a press is the same
+    // perceptual distance everywhere on the axis.
+    const from = screenFromChromaFraction(planePointForColor(base).t);
+    expect(screenFromChromaFraction(planePointForColor(up).t)).toBeCloseTo(
+      from + CHROMA_SCREEN_NUDGE,
+      8,
+    );
+    expect(screenFromChromaFraction(planePointForColor(down).t)).toBeCloseTo(
+      from - CHROMA_SCREEN_NUDGE,
+      8,
+    );
     expect(up.h).toBe(base.h);
   });
 
@@ -327,7 +400,10 @@ describe("renderPlanePixels", () => {
 
     const x = 11;
     const y = 6;
-    const point: PlanePoint = { h: ((x + 0.5) / width) * 360, t: 1 - (y + 0.5) / height };
+    const point: PlanePoint = {
+      h: ((x + 0.5) / width) * 360,
+      t: chromaFractionFromScreen(1 - (y + 0.5) / height),
+    };
     const expected = oklchToSrgb(planePointToOklch(point, L));
     const i = (y * width + x) * 4;
 
@@ -353,8 +429,9 @@ describe("renderPlanePixels", () => {
       return Math.max(...channels) - Math.min(...channels);
     };
 
-    // The lattice samples the bottom row at t ≈ 1/48 rather than exactly 0, so
-    // "grey" is a couple of code values wide, not identically neutral.
+    // The lattice samples the bottom row just above s = 0; through the warp that
+    // is t ≈ 0.006, so "grey" is a couple of code values wide, not identically
+    // neutral — and the warp makes the floor greyer than a linear axis would.
     for (const x of [0, 6, 12, 18]) {
       expect(spread(x, height - 1)).toBeLessThanOrEqual(5);
       expect(spread(x, 0)).toBeGreaterThan(50);
@@ -733,7 +810,8 @@ describe("createPicker", () => {
     // guess, so the two together read as the error.
     expect(marker.hidden).toBe(false);
     expect(marker.style.left).toBe("50.000%");
-    expect(marker.style.top).toBe("50.000%");
+    // Vertical position is warped: t = 0.5 sits at ~27% down from the top, not 50%.
+    expect(marker.style.top).toBe("26.751%");
     expect(marker.style.getPropertyValue("--fill-color")).toBe(oklchToCss(target));
     expect(cursor.style.left).toBe("25.000%");
 
@@ -747,11 +825,12 @@ describe("createPicker", () => {
     expect(barDiff.style.left).toBe("40.000%");
     expect(barDiff.style.width).toBe("20.000%");
 
-    // The connector runs guess → target.
+    // The connector runs guess → target; y is warped (guess t=0.25 → 50%, target
+    // t=0.5 → ~27%).
     expect(line.getAttribute("x1")).toBe("25.000");
-    expect(line.getAttribute("y1")).toBe("75.000");
+    expect(line.getAttribute("y1")).toBe("50.000");
     expect(line.getAttribute("x2")).toBe("50.000");
-    expect(line.getAttribute("y2")).toBe("50.000");
+    expect(line.getAttribute("y2")).toBe("26.751");
   });
 
   it("shows no target reticle while picking, and scrubs its colour after reveal", () => {

@@ -12,7 +12,7 @@ the most valuable thing in here.
 | [0001](0001-no-ui-framework.md) | No UI framework; pure TypeScript + DOM | accepted |
 | [0002](0002-functional-core-imperative-shell.md) | Functional core, imperative shell; injected time and randomness | accepted |
 | [0003](0003-fast-check-for-property-tests.md) | fast-check for property tests | accepted |
-| [0004](0004-perceptual-scoring.md) | CIEDE2000 + stretched-exponential score curve | accepted |
+| [0004](0004-perceptual-scoring.md) | CIEDE2000 + stretched-exponential score curve | accepted — **τ retuned by 0028** |
 | [0005](0005-picker-geometry.md) | L×C plane at constant hue + hue slider | **superseded by 0007** |
 | [0006](0006-afterimage-mask.md) | Dissolve through a neutral afterimage mask | **superseded by 0008** |
 | [0007](0007-picker-shows-every-hue.md) | Picker plane shows every hue; lightness on a bar | accepted |
@@ -36,6 +36,7 @@ the most valuable thing in here.
 | [0025](0025-rename-in-app-delete-by-operator.md) | Rename in the app; deletion is an operator action, not self-serve | accepted — **revises 0011** |
 | [0026](0026-leaderboard-attempts-and-seed-challenges.md) | Board rows expand into a replayed attempt; chosen seeds are challenges, ranked on their own board only | accepted |
 | [0027](0027-mobile-phase-action-bar.md) | The phone screen is status · readout · picker · action bar | accepted |
+| [0028](0028-generosity-retune.md) | Score-curve generosity τ 16 → 18, with a one-time leaderboard reset | accepted — **refines 0004** |
 
 ## Already rejected — do not re-propose without new evidence
 
