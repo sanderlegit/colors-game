@@ -34,22 +34,22 @@ const anyOklch = fc
 const anyDelta = fc.double({ min: 0, max: 200, noNaN: true });
 
 describe("curve constants", () => {
-  it("are the values ADR 0004 fixed", () => {
+  it("are the values ADR 0004 fixed, with the ADR 0028 generosity retune", () => {
     // Pinned so that a retune is a deliberate, visible change rather than a
-    // silent drift in gameplay feel.
+    // silent drift in gameplay feel. SCORE_SCALE moved 16 → 18 in ADR 0028.
     expect(SCORE_DEADBAND).toBe(1);
-    expect(SCORE_SCALE).toBe(16);
+    expect(SCORE_SCALE).toBe(18);
     expect(SCORE_EXPONENT).toBe(1.3);
   });
 });
 
-describe("scoreFromDelta — ADR 0004 reference points", () => {
+describe("scoreFromDelta — reference points (τ = 18, ADR 0028)", () => {
   const REFERENCE: ReadonlyArray<readonly [number, number]> = [
-    [2, 97],
-    [5, 85],
-    [12, 54],
-    [20, 29],
-    [45, 2],
+    [2, 98],
+    [5, 87],
+    [12, 59],
+    [20, 34],
+    [45, 4],
   ];
 
   for (const [deltaE, expected] of REFERENCE) {
@@ -58,9 +58,11 @@ describe("scoreFromDelta — ADR 0004 reference points", () => {
     });
   }
 
-  it("bottoms out where the research table says it does", () => {
-    // color-science.md §2.3: 60 → 0.4, 100 (black↔white) → 0.0.
-    expect(scoreFromDelta(60)).toBeCloseTo(0.4, 1);
+  it("bottoms out near zero at the top of the ΔE range", () => {
+    // color-science.md §2.3 tabulated 60 → 0.4 at τ = 16; the τ = 18 retune
+    // (ADR 0028) lifts the whole tail slightly, so 60 → ~0.9 and black↔white
+    // (ΔE 100) still rounds to 0.
+    expect(scoreFromDelta(60)).toBeCloseTo(0.9, 1);
     expect(Math.round(scoreFromDelta(100))).toBe(0);
   });
 });

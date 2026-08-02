@@ -140,10 +140,11 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
   (ADR 0004). Note the D65 requirement: CSS `lab()` is D50 and must not be used
   as a reference.
 - Distance maps to a 0–100 round score by
-  `100 · exp(−((max(0, ΔE00 − 1) / 16) ^ 1.3))`, which gives:
+  `100 · exp(−((max(0, ΔE00 − 1) / 18) ^ 1.3))` (τ = 18 since ADR 0028; was 16),
+  which gives:
   - a full 100 below the perceptibility threshold,
-  - ΔE 2 → 97, 5 → 85, 12 → 54, 20 → 29, 45 → 2,
-  - chance level around ΔE 11, with a random guess beating 50 only 5.4% of the time.
+  - ΔE 2 → 98, 5 → 87, 12 → 59, 20 → 34, 45 → 4,
+  - chance level around ΔE 11, with a random guess beating 50 only ~6.8% of the time.
 - Any averaged score shown in the UI is a **median**, not a mean — the
   random-guess distribution is heavily right-skewed and a mean misleads.
 - The reveal screen shows the raw ΔE alongside the score. Showing the underlying

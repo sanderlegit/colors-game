@@ -33,12 +33,16 @@ import type { Oklch } from "@/color/types";
 export const SCORE_DEADBAND = 1;
 
 /**
- * The generosity knob (`τ`). Larger is kinder: at 18 a ΔE00 of 12 scores 67
- * rather than 54, and a random guess beats 50 points 6.8% of the time instead of
- * 5.4%. Vary this per difficulty tier if tiers ever need to move the curve —
- * never change the shape.
+ * The generosity knob (`τ`). Larger is kinder. Raised from ADR 0004's 16 to 18
+ * (ADR 0028): a ΔE00 of 12 now scores 59 rather than 54 and 5 scores 87 rather
+ * than 85, so a guess that reads as close *side by side at reveal* is rewarded
+ * more like it looks — the cost is that a random guess beats 50 points ~6.8% of
+ * the time instead of 5.4%. This retune reset the leaderboard once
+ * (`migrations/0005`), because scores under the two constants are not comparable
+ * and do not re-derive (ADR 0016). Vary this per difficulty tier if the tiers are
+ * ever made reachable and need to move the curve — never change the shape.
  */
-export const SCORE_SCALE = 16;
+export const SCORE_SCALE = 18;
 
 /**
  * The shape (`k`), and the one genuinely tuned number. A Gaussian (k = 2) puts

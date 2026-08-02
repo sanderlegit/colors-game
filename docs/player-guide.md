@@ -15,11 +15,11 @@ Lower is better. 0 means you nailed it.
 | ΔE | What you'd see | Your score |
 |----|----------------|-----------:|
 | under 1 | Nobody could tell them apart | **100** |
-| 2 | You'd have to stare to spot it | **97** |
-| 5 | Clearly two different colors, but close cousins | **85** |
-| 12 | Same family, obviously wrong shade | **54** |
-| 20 | Wrong | **29** |
-| 45 | Not remotely the same color | **2** |
+| 2 | You'd have to stare to spot it | **98** |
+| 5 | Clearly two different colors, but close cousins | **87** |
+| 12 | Same family, obviously wrong shade | **59** |
+| 20 | Wrong | **34** |
+| 45 | Not remotely the same color | **4** |
 
 For scale: pure black against pure white is exactly 100.
 
@@ -60,7 +60,7 @@ Three things the scoring curve is built to do:
 2. **Near misses stay rewarding.** The curve is deliberately flat at the top, so
    getting close still feels good.
 3. **Lucky guesses don't pay.** If you picked completely at random, you'd beat 50
-   points only about 5% of the time. A good score means you actually remembered
+   points only about 7% of the time. A good score means you actually remembered
    something.
 
 ## Why we show you the ΔE
@@ -130,7 +130,7 @@ Two consequences you may notice:
 
 ## A worked example
 
-Say you scored **ΔE 19.4 → 30 points**.
+Say you scored **ΔE 19.4 → 36 points**.
 
 That means: clearly the wrong color, but the same broad idea — right neighbourhood,
 wrong house. You probably had the hue roughly right and missed on brightness or

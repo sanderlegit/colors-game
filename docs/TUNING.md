@@ -21,30 +21,33 @@ score = 100 · exp( −( max(0, ΔE00 − SCORE_DEADBAND) / SCORE_SCALE ) ^ SCOR
 | Constant | Now | What it does |
 |----------|----:|--------------|
 | `SCORE_DEADBAND` | 1 | ΔE00 below which you get a full 100. **Leave this alone** — it is anchored to the measured perceptibility threshold (0.8) and W3C's JND (2). Scoring 97 for an invisible miss reads as a broken game. |
-| `SCORE_SCALE` | 16 | **The generosity knob.** Higher is kinder. At 18, ΔE 12 scores 67 instead of 54, and a random guess beats 50 points 6.8% of the time instead of 5.4%. This is the one to reach for first. |
+| `SCORE_SCALE` | 18 | **The generosity knob.** Higher is kinder. Raised 16 → 18 by ADR 0028: ΔE 12 now scores 59 (was 54) and 5 scores 87 (was 85), and a random guess beats 50 ~6.8% of the time (was 5.4%). This is the one to reach for first — but it now costs a board reset (see below). |
 | `SCORE_EXPONENT` | 1.3 | The *shape*. Tuned, not arbitrary: at 2 (Gaussian) a random guess clears 50 points ~12% of the time and a good score stops meaning anything; at 1 a barely-perceptible ΔE 2 already costs 6 points. **Change `SCORE_SCALE` instead unless you have a reason to reshape the curve.** |
 
-Reference points at the current settings: ΔE 2 → 97, 5 → 85, 12 → 54, 20 → 29,
-45 → 2. The property tests hold whatever the numbers become (identity = 100,
+Reference points at the current settings (τ = 18): ΔE 2 → 98, 5 → 87, 12 → 59,
+20 → 34, 45 → 4. The property tests hold whatever the numbers become (identity = 100,
 bounded, monotonic, symmetric).
 
 **Retuning is no longer a local change.** It was, before there was a leaderboard.
-Now, changing any of these constants means:
+[ADR 0028](adr/0028-generosity-retune.md) is the worked example — the 16 → 18
+generosity move — and it touched every one of these:
 
-1. `src/domain/scoring.test.ts` pins `SCORE_SCALE` to 16 and pins all five
+1. `src/domain/scoring.test.ts` pins `SCORE_SCALE` (now 18) and all five
    reference points. `npm run verify` fails until you update both.
 2. SPEC §6 and `player-guide.md` quote the same figures.
 3. The "Now" column above.
 4. **Scores already on the leaderboard were computed under the old constants and
    will not re-derive** (ADR 0016). A retune silently makes old and new board
    entries incomparable. Decide deliberately whether to reset the board, and say
-   which you chose.
+   which you chose — ADR 0028 reset it via `migrations/0005_reset_leaderboard.sql`.
 5. The pinning test calls these "the values ADR 0004 fixed", so a retune is
    arguably a decision that supersedes it — per CLAUDE.md § Decisions, write the
-   ADR rather than quietly editing the number.
+   ADR rather than quietly editing the number (ADR 0028 refines 0004).
 
-If tiers ever need to move the curve, vary `SCORE_SCALE` per tier. Do not change
-the shape per tier.
+If the difficulty tiers are ever made reachable and need to move the curve, vary
+`SCORE_SCALE` per tier. Do not change the shape per tier. Note the measured trap
+(ADR 0028): equalising *skilled* scores across tiers inflates chance-level on the
+desaturated tier, because near-neutral targets compress the whole ΔE range.
 
 ## How hard the target colours are
 
@@ -80,10 +83,20 @@ The three nudges are sized for **equal ΔE00 per keypress** (~0.2–0.25 at a
 mid-plane reference), not equal screen travel, so a keyboard correction costs the
 same on every axis. Only chroma was out of line — measured, not eyeballed.
 
+The plane's **y axis is perceptually warped** (`CHROMA_WARP`): screen position is
+`ln(1+β·t)/ln(1+β)` of the chroma fraction `t`, with β = 8. A linear chroma axis
+is badly front-loaded — measured grey→vivid, the bottom quarter holds ~half the
+total ΔE00 — so near grey a pixel moved ~3× the ΔE it did near full chroma. The
+warp roughly halves that unevenness (max/min ΔE per equal step ~3.1 → ~1.8). It is
+hue-independent on purpose: a per-column warp would cost a ΔE bisection per pixel
+and break "a row is one chroma level". Because ΔE is now ~linear in screen
+position, the vertical nudge steps *screen* space, not `t`.
+
 | Constant | Now | Notes |
 |----------|----:|-------|
 | `HUE_NUDGE_DEG` | 0.5 | Hue is the plane's x axis. Sub-pixel at both phone and desktop widths; ~0.2–0.25 ΔE00/press. |
-| `CHROMA_FRACTION_NUDGE` | 0.01 | Plane y axis. Was 0.0025 (an even 1/400 of the axis) — but that moved only ~0.06 ΔE00, ~4× finer than the other two arrows, so chroma took ~4× the keystrokes for the same perceptual gain. 0.01 matches them (~0.22 ΔE00) and is still sub-two-pixel. |
+| `CHROMA_WARP` | 8 | Curvature of the y-axis warp (above). Fit to the hue-averaged cumulative-ΔE curve; `s = ½` lands at `t ≈ 0.25`. |
+| `CHROMA_SCREEN_NUDGE` | 0.01 | Plane y arrow, a **screen** step (replaces Phase 1's `CHROMA_FRACTION_NUDGE`). Because the warp makes ΔE ~linear in screen position, a constant screen step is ~constant ΔE everywhere on the axis (~0.2–0.3 ΔE00). |
 | `LIGHTNESS_NUDGE` | 0.0025 | The bar. ~1.1px at a 450px bar, ~0.25 ΔE00/press — already matched to the hue arrow. Note: per unit of its own 0..1 control, lightness is the **most** ΔE-sensitive axis, not the least. |
 | `COARSE_MULTIPLIER` | 10 | **Shift makes steps coarser, never finer.** |
 | `DRAFT_SAMPLES` / `FINAL_SAMPLES` | 24k / 120k | Draft lattice during a lightness drag, refined 120ms after it settles. This is the repaint-budget trade — see `BACKLOG.md`. |

@@ -1,7 +1,12 @@
 # 0004 — Score with CIEDE2000 and a stretched-exponential curve
 
-Date: 2026-08-01 · Status: accepted
+Date: 2026-08-01 · Status: accepted — **`SCORE_SCALE` (τ) retuned 16 → 18 by [ADR 0028](0028-generosity-retune.md)**
 Research: `docs/research/color-science.md`, `docs/research/test-vectors.md`
+
+> **Note (ADR 0028):** the metric (CIEDE2000), the shape (`k = 1.3`), and the
+> deadband (`d₀ = 1`) below still stand. Only the generosity `τ` moved, 16 → 18;
+> the reference-point numbers in this ADR are the original τ = 16 values. See
+> ADR 0028 for the retuned figures and the leaderboard reset it required.
 
 ## Context
 
