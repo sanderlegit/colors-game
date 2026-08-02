@@ -493,7 +493,7 @@ describe("the board", () => {
   });
 });
 
-describe("the per-seed board (ADR 0025)", () => {
+describe("the per-seed board (ADR 0026)", () => {
   /** A named player who finished one game on `seed`, scoring `score`. */
   async function onSeed(
     repo: Repo,

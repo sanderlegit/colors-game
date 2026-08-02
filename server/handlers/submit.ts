@@ -176,7 +176,7 @@ export const submitResult: Handler = async (
     totalScore: scored.totalScore,
     // A challenge game is never ranked on the *global* board however clean it is:
     // its seed was chosen, and a chosen seed the player could pick for being easy
-    // must not raise `best_score` (ADR 0025, upholding ADR 0015). It still counts
+    // must not raise `best_score` (ADR 0026, upholding ADR 0015). It still counts
     // as played and still ranks on its own seed's board.
     ranked: scored.flags === 0 && game.kind === "open",
     at: now,

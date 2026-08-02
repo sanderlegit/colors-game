@@ -5,7 +5,7 @@
  * Extracted so the summary screen (`menu.ts`) and the leaderboard attempt panel
  * (`leaderboard.ts`) render rounds the same way — one place owns the
  * "Round N … (ΔE …)" wording and the two-chip layout, rather than two that drift
- * (ADR 0025). It renders from anything shaped like a scored round with its two
+ * (ADR 0026). It renders from anything shaped like a scored round with its two
  * colours: `RoundResult` from the domain and `AttemptRound` from the API both
  * satisfy `BreakdownRound` structurally.
  *

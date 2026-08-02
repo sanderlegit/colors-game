@@ -34,7 +34,7 @@ import { reportClientError } from "./handlers/clientError";
 import { startGame } from "./handlers/games";
 import { deepHealth, health } from "./handlers/health";
 import { getLeaderboard } from "./handlers/leaderboard";
-import { forgetMe, getMe } from "./handlers/me";
+import { getMe } from "./handlers/me";
 import { setUsername } from "./handlers/name";
 import { submitResult } from "./handlers/submit";
 import { canonicalRedirect } from "./http/canonical";
@@ -72,7 +72,6 @@ const ROUTES: readonly ApiRoute[] = [
   { method: "GET", path: "/api/health", handle: health, event: "health_checked" },
   { method: "GET", path: "/api/health/deep", handle: deepHealth, event: "dependencies_checked" },
   { method: "GET", path: "/api/me", handle: getMe, event: "identity_read" },
-  { method: "DELETE", path: "/api/me", handle: forgetMe, event: "identity_forgotten" },
   { method: "POST", path: "/api/games", handle: startGame, event: "game_started" },
   {
     method: "POST",

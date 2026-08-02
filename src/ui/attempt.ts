@@ -1,5 +1,5 @@
 /**
- * The panel a leaderboard row expands into (ADR 0025): a player's game replayed
+ * The panel a leaderboard row expands into (ADR 0026): a player's game replayed
  * round by round, with a close, a copy-link and an "only this seed" action.
  *
  * A dumb view, like the board it lives in (ADR 0012): it renders from a pushed

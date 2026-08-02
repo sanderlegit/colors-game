@@ -107,7 +107,6 @@ const EVERY_METHOD: readonly ((api: GameApi) => Promise<Result<unknown>>)[] = [
   (api) => api.claimName("ada"),
   (api) => api.leaderboard(),
   (api) => api.attempt("g_01H8XK"),
-  (api) => api.forget(),
 ];
 
 describe("createApi request shape", () => {
@@ -210,7 +209,6 @@ describe("createApi decoding", () => {
     );
     expect(expectValue(await client.leaderboard())).toEqual(VALID_LEADERBOARD);
     expect(expectValue(await client.claimName("ada"))).toEqual({ name: "ada" });
-    expect(expectValue(await client.forget())).toBeNull();
   });
 
   const garbage: ReadonlyArray<readonly [string, string]> = [
@@ -422,7 +420,6 @@ describe("createFakeApi", () => {
       "claimName",
       "leaderboard",
       "attempt",
-      "forget",
     ]);
   });
 

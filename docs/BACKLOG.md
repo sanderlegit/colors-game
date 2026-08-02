@@ -93,7 +93,7 @@ memorized-rect-vs-picker (does not, and needs the test).
 
 ### Known gaps
 
-- **The "Copy link" button gives no feedback.** ADR 0025's share writes
+- **The "Copy link" button gives no feedback.** ADR 0026's share writes
   `/?board=<gameId>` to the clipboard and says nothing — success or a denied
   permission (insecure context) both look identical. A transient "Copied" line
   needs a channel the board's delegated-click model does not have yet.
@@ -265,13 +265,13 @@ exist, and `games.flags` has two defined bits. What is left:
 
 ## Deliberately deferred
 
-Daily challenge (seeds already support it — and ADR 0025's `challengeOf` is the
+Daily challenge (seeds already support it — and ADR 0026's `challengeOf` is the
 mechanism a daily would issue against), share cards, leaderboard + server-side
 target generation, sound, PWA offline install, difficulty progression tuning based
 on real score distributions.
 
 **Shipped since:** the board's expandable attempt view and per-seed *challenge*
-boards (ADR 0025). A daily challenge is now a small follow-up — a shared seed
+boards (ADR 0026). A daily challenge is now a small follow-up — a shared seed
 issued once a day and a `challengeOf` game against it — rather than new
 mechanism.
 

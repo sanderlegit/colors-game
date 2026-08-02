@@ -44,7 +44,7 @@ export type LeaderboardEntry = {
   /**
    * The game this row's score belongs to. Opaque here — the client never reads a
    * seed — but it is what an attempt breakdown is fetched from, and what the seed
-   * filter and the share link reference (ADR 0025).
+   * filter and the share link reference (ADR 0026).
    */
   readonly gameId: string;
 };
@@ -94,7 +94,7 @@ export type GameApi = {
   me(): Promise<Result<Identity | null>>;
   /**
    * Mint a game. `challengeOf` names an existing game whose seed to play — a
-   * shared challenge (ADR 0025); its result ranks only on that seed's board. Its
+   * shared challenge (ADR 0026); its result ranks only on that seed's board. Its
    * absence is an ordinary open game.
    */
   startRanked(memorizeMs: number, challengeOf?: string): Promise<Result<RankedGame>>;
@@ -104,7 +104,6 @@ export type GameApi = {
   leaderboard(forGame?: string): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>>;
   /** The per-round breakdown for a finished game, replayed server-side. */
   attempt(gameId: string): Promise<Result<Attempt>>;
-  forget(): Promise<Result<null>>;
 };
 
 export type ApiOptions = {
@@ -354,10 +353,6 @@ export function createApi(options: ApiOptions = {}): GameApi {
     async attempt(gameId: string): Promise<Result<Attempt>> {
       const path = `/games/${encodeURIComponent(gameId)}/attempt`;
       return decoded(await send("GET", path, undefined), decodeAttempt);
-    },
-    async forget(): Promise<Result<null>> {
-      const res = await send("DELETE", "/me", undefined);
-      return res.ok ? { ok: true, value: null } : res;
     },
   };
 }

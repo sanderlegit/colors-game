@@ -37,7 +37,7 @@ export type GameStatus = "active" | "finished" | "expired";
 
 /**
  * Whether the seed was minted for this game or chosen from an existing one
- * (ADR 0025). Only `open` games may raise `players.best_score`; a `challenge`
+ * (ADR 0026). Only `open` games may raise `players.best_score`; a `challenge`
  * game ranks solely on its seed's board, because a chosen seed the player could
  * pick for being easy must not reach the global board.
  */
@@ -121,7 +121,7 @@ export type BoardRow = {
    * `best_game_id`; for a per-seed board it is the game that reached that score
    * on the seed. It is what the client fetches an attempt breakdown from, and
    * what a share link and the "only this seed" filter reference — a stable,
-   * already-public handle that lets the raw `seed` stay server-side (ADR 0025).
+   * already-public handle that lets the raw `seed` stay server-side (ADR 0026).
    */
   readonly gameId: string;
 };
@@ -267,13 +267,21 @@ export type Repo = {
     readonly at: number;
   }): Promise<void>;
 
-  /** Removes the player and every game they played. */
+  /**
+   * Removes the player and every game they played.
+   *
+   * No handler calls this: there is no self-serve delete (ADR 0025). It stays as
+   * the canonical single-player delete — the two-statement shape the operator
+   * script (`just delete-player`) mirrors in raw SQL, and the primitive tests and
+   * fixtures reach for to make a fresh row. Deletion of a real player happens out
+   * of band, not through the API.
+   */
   deletePlayer(playerId: number): Promise<void>;
 
   topPlayers(limit: number): Promise<readonly BoardRow[]>;
 
   /**
-   * The board for one seed (ADR 0025): each named player's best finished,
+   * The board for one seed (ADR 0026): each named player's best finished,
    * unflagged game on `seed`, ordered `total_score DESC, name ASC` — the same
    * order as the global board, so a rank shown here cannot disagree with the
    * row it sits on. Both `open` and `challenge` games count, so the player who

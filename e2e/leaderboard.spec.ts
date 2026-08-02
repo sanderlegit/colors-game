@@ -223,6 +223,37 @@ test("setting a username shows who you are playing as", async ({ page }) => {
   expect(api.calls("claim")).toBe(1);
 });
 
+test("Change name reopens the form and renames without leaving the summary (ADR 0025)", async ({
+  page,
+}) => {
+  test.slow();
+
+  const api = await installApi(page, {
+    result: submission({ name: null, rank: 4 }),
+    claim: { status: 200, body: { name: "Ada" } },
+  });
+  await page.goto("/");
+  await playFullGame(page);
+
+  await page.getByLabel("Set your username").fill("Ada");
+  await page.getByRole("button", { name: "Set username", exact: true }).click();
+  await expect(page.getByText("Playing as")).toBeVisible();
+  await expect(page.getByText("Ada", { exact: true })).toBeVisible();
+
+  // Rename: the same endpoint, echoing the new name this time.
+  api.set("claim", { status: 200, body: { name: "Grace" } });
+  await page.getByRole("button", { name: "Change name" }).click();
+
+  const field = page.getByLabel("Change your username");
+  await expect(field).toHaveValue("Ada");
+  await field.fill("Grace");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(page.getByText("Grace", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Change name" })).toBeVisible();
+  expect(api.calls("claim")).toBe(2);
+});
+
 test("a round still plays through to a score with every API request refused", async ({ page }) => {
   // The promise the whole seed-replay design was chosen to keep: the API is a
   // place to put a score, never a thing the game needs in order to be played.
@@ -248,7 +279,7 @@ test("a round still plays through to a score with every API request refused", as
   await expect(page.locator(".picker-plane")).toBeVisible();
 });
 
-test.describe("expanding a row into its attempt (ADR 0025)", () => {
+test.describe("expanding a row into its attempt (ADR 0026)", () => {
   test("shows the round breakdown, and closes again on a second tap", async ({ page }) => {
     await installApi(page);
     await page.goto("/");

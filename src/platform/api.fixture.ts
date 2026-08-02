@@ -34,8 +34,7 @@ export type ApiCall =
   | { readonly method: "submit"; readonly request: SubmitRequest }
   | { readonly method: "claimName"; readonly name: string }
   | { readonly method: "leaderboard"; readonly forGame?: string }
-  | { readonly method: "attempt"; readonly gameId: string }
-  | { readonly method: "forget" };
+  | { readonly method: "attempt"; readonly gameId: string };
 
 export type CannedApi = {
   readonly me?: Result<Identity | null>;
@@ -44,7 +43,6 @@ export type CannedApi = {
   readonly claimName?: Result<{ readonly name: string }>;
   readonly leaderboard?: Result<{ readonly entries: readonly LeaderboardEntry[] }>;
   readonly attempt?: Result<Attempt>;
-  readonly forget?: Result<null>;
 };
 
 export type FakeApi = GameApi & {
@@ -128,6 +126,5 @@ export function createFakeApi(canned: CannedApi = {}): FakeApi {
       ),
     attempt: (gameId: string) =>
       record({ method: "attempt", gameId }, canned.attempt ?? ok(FIXTURE_ATTEMPT)),
-    forget: () => record({ method: "forget" }, canned.forget ?? ok(null)),
   };
 }

@@ -1,4 +1,4 @@
-# 0025 — Leaderboard rows expand into a replayed attempt; seeds become challenges
+# 0026 — Leaderboard rows expand into a replayed attempt; seeds become challenges
 
 Date: 2026-08-02 · Status: accepted
 

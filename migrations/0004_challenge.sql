@@ -1,4 +1,4 @@
--- Seed challenges (ADR 0025).
+-- Seed challenges (ADR 0026).
 --
 -- A game is now one of two kinds:
 --

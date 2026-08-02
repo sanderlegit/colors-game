@@ -70,7 +70,7 @@ describe("GET /api/leaderboard", () => {
     // `topPlayers` returns the player id so the handler can set `isYou`. It is a
     // stable identifier for somebody who has given us only a name, and stays
     // server-side. `gameId` does go out — a row expands into that game's attempt
-    // (ADR 0025) — but the raw seed never does (`server/hygiene.test.ts`).
+    // (ADR 0026) — but the raw seed never does (`server/hygiene.test.ts`).
     const host = createClient();
     await playGame(host, { name: "Ada" });
     for (const row of await board(host)) {
@@ -94,7 +94,7 @@ describe("GET /api/leaderboard", () => {
     expect(asked).toBe(BOARD_SIZE);
   });
 
-  describe("?forGame — one seed's board (ADR 0025)", () => {
+  describe("?forGame — one seed's board (ADR 0026)", () => {
     async function seedBoard(
       client: Client,
       forGame: string,

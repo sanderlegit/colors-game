@@ -493,7 +493,7 @@ p {
   font-weight: 700;
 }
 
-/* --- Expandable rows: the attempt panel (ADR 0025) ------------------------ */
+/* --- Expandable rows: the attempt panel (ADR 0026) ------------------------ */
 
 /* The name cell is a toggle. A borderless button so the row still reads as a
    row, with a caret that turns when it opens — never colour alone. */
@@ -655,18 +655,21 @@ p {
 }
 
 .identity-claim,
-.identity-forget {
+.identity-cancel {
   min-height: var(--tap-target);
   padding: 0 var(--space-3);
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
-/* The armed half of the two-click confirm. Not colour alone — the label itself
-   changes to "Really forget me?" (ADR 0011). */
-.identity-forget.is-armed {
-  border-color: var(--color-target);
-  color: var(--color-target);
+/* "Change name" sits inline after "Playing as …", so it reads as a secondary
+   control rather than a second primary button (ADR 0025). */
+.identity-rename {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
 }
 
 /* --- The shared rect (SPEC §2.1, ARCHITECTURE § "The dissolve") ----------- */

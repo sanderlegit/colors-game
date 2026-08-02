@@ -1,6 +1,6 @@
 /**
  * `GET /api/leaderboard` → 200 `{ entries[] }`, optionally `?forGame=<gameId>`
- * for one seed's board (ADR 0025).
+ * for one seed's board (ADR 0026).
  *
  * Each entry is `{ rank, name, score, isYou, gameId }`. `Repo.topPlayers`
  * returns the rows in the board's order and carries `playerId` for exactly one

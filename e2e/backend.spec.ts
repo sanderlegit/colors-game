@@ -12,7 +12,7 @@ import { playFullGame } from "./support";
  * trip through start → submit → set username → board touches `insertGame`,
  * `findGame`, `finishGame`, `insertPlayer`, `findPlayerByTokenHash`,
  * `recordFinishedGame`, `setName`, `topPlayers` and `countPlayersAbove`.
- * Expanding the row and filtering to its seed adds the ADR 0025 statements:
+ * Expanding the row and filtering to its seed adds the ADR 0026 statements:
  * the attempt replay's `findGame`, and `topPlayersBySeed`'s window query — the
  * one bit of SQL a memory double cannot vet.
  *
@@ -76,7 +76,7 @@ test("start → submit → set username → board, against a real D1", async ({ 
   await page.getByRole("tab", { name: "Leaderboard" }).click();
   await expect(page.getByRole("rowheader", { name: `${NAME} (you)` })).toBeVisible();
 
-  // ADR 0025: the row expands into the attempt the Worker replayed from the
+  // ADR 0026: the row expands into the attempt the Worker replayed from the
   // stored `seed` and `guesses_json`. Five rounds and the same total prove the
   // replay read a real row back and re-derived the colours.
   await page

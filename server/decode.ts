@@ -59,7 +59,7 @@ export type StartGameBody = {
   readonly memorizeMs: number;
   readonly difficulty: Difficulty;
   /**
-   * The game whose seed to play, or absent for a fresh open game (ADR 0025). It
+   * The game whose seed to play, or absent for a fresh open game (ADR 0026). It
    * names a game, never a seed — the seed and difficulty are read from that row
    * server-side, so a caller still cannot choose the numbers it plays against.
    */

@@ -209,11 +209,14 @@ first-party cookie the server sets (ADR 0011):
 - **Names are not unique** (ADR 0024). The name you set is the name you get; two
   players sharing a name is an ordinary outcome, and the board keeps them apart
   and stably ordered by account age.
+- **You can change your name whenever** (ADR 0025). "Change name" reopens the
+  form pre-filled; setting a new name overwrites the old one and keeps your
+  scores and board position — a rename is not a new identity.
 - **Lose the cookie, lose the name.** Cleared storage, a private window or a
   second device is a fresh identity. There is no recovery code, by decision.
-- **"Forget me" is a real delete**, behind a two-click confirm (the button
-  relabels and reverts on blur). Never `window.confirm`, which blocks the frame
-  loop the whole game runs on.
+- **There is no "forget me" in the app** (ADR 0025). A player cannot delete
+  themselves; deletion is a rare operator action (`just delete-player`), so a
+  data-removal request goes to whoever runs the stack rather than through a button.
 - The client validates only that a name is non-empty after trimming and within
   `MAX_NAME_LENGTH`. Every other rule is the server's and its verdict is rendered
   verbatim — a client that mirrors the server's rules starts refusing names the
@@ -226,7 +229,7 @@ Best game score per player, one row each, with your own row marked by
 colour alone (§8). It loads when the tab is opened, not at boot, and an empty
 board is a successful answer rather than an error.
 
-**A row expands into that attempt** (ADR 0025). Tapping a row slides a panel out
+**A row expands into that attempt** (ADR 0026). Tapping a row slides a panel out
 beneath it — the same per-round breakdown the summary screen shows (target and
 guess chips, `Round N`, score and ΔE), for a game this browser never played. The
 panel is the server *replaying* the stored game, not the seed handed over: nothing
@@ -240,7 +243,7 @@ that filtered board. From there, **Play this seed** starts a game on the same
 colours. A game played this way is a *challenge*: it ranks on that seed's board
 but **never raises your global best score**, because its seed was chosen and a
 chosen seed you could pick for being easy must not reach the global board
-(ADR 0015, ADR 0025). The client never names a seed — it points at an existing
+(ADR 0015, ADR 0026). The client never names a seed — it points at an existing
 game, and the server reads the seed off that row.
 
 ### 7.3 Unranked games

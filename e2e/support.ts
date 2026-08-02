@@ -72,7 +72,7 @@ export async function playFullGame(page: Page): Promise<void> {
 export type Reply = { readonly status: number; readonly body?: unknown };
 
 /** One key per endpoint `src/platform/api.ts` can reach. */
-export type ApiKey = "me" | "games" | "result" | "attempt" | "claim" | "leaderboard" | "forget";
+export type ApiKey = "me" | "games" | "result" | "attempt" | "claim" | "leaderboard";
 
 export type BoardEntry = {
   readonly rank: number;
@@ -135,12 +135,11 @@ function defaults(): Record<ApiKey, Reply> {
       { rank: 1, name: "Ada", score: 468, isYou: false, gameId: "g-ada" },
       { rank: 2, name: "Grace", score: 431, isYou: false, gameId: "g-grace" },
     ]),
-    forget: { status: 204 },
   };
 }
 
-function keyFor(method: string, pathname: string): ApiKey | null {
-  if (pathname === "/api/me") return method === "DELETE" ? "forget" : "me";
+function keyFor(pathname: string): ApiKey | null {
+  if (pathname === "/api/me") return "me";
   if (pathname === "/api/games") return "games";
   if (pathname.endsWith("/attempt")) return "attempt";
   if (pathname.startsWith("/api/games/")) return "result";
@@ -164,7 +163,7 @@ export async function installApi(
     (url) => url.pathname.startsWith("/api/"),
     async (route) => {
       const request = route.request();
-      const key = keyFor(request.method(), new URL(request.url()).pathname);
+      const key = keyFor(new URL(request.url()).pathname);
       // `/api/client-error` and anything else: accepted and ignored, so a stray
       // beacon cannot fail a test that is not about it.
       if (key === null) {

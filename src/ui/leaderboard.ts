@@ -1,5 +1,5 @@
 /**
- * The board (ADR 0012, expanded by ADR 0025).
+ * The board (ADR 0012, expanded by ADR 0026).
  *
  * Still driven entirely by `setView` — nothing it shows comes from `GameState`,
  * so it is not in the frame loop. Two things are new:

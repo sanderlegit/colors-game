@@ -29,7 +29,6 @@ function setup() {
   const onTabSelect = vi.fn<(tab: TabId) => void>();
   const onRetry = vi.fn();
   const onClaim = vi.fn<(name: string) => void>();
-  const onForget = vi.fn();
 
   const shell = createShell(root, {
     game: { dispatch: () => {}, createPicker: stubPicker, nextSeed: () => 1 },
@@ -41,7 +40,7 @@ function setup() {
       onClearFilter: vi.fn(),
       onPlaySeed: vi.fn(),
     },
-    identity: { onClaim, onForget },
+    identity: { onClaim },
     onTabSelect,
   });
 
