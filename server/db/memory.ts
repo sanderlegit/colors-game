@@ -4,10 +4,10 @@
  * A double is only worth having if it fails where the real thing fails, so four
  * behaviours are reproduced deliberately rather than allowed to fall out:
  *
- * 1. **Unique violations.** `token_hash`, `games.id` and the partial unique
- *    index on `name_key` all reject duplicates here too. A double that quietly
- *    accepts a duplicate name turns the handler test for auto-suffixing into a
- *    test that the suffix code never runs.
+ * 1. **Unique violations.** `token_hash` and `games.id` reject duplicates here
+ *    too. Display names are deliberately *not* among them (ADR 0024): two
+ *    players may hold the same name, and the board order falls back to `id` to
+ *    stay total — reproduced in `byBoardOrder` and `countPlayersAbove` below.
  * 2. **The conditional update returns false.** `finishGame` only changes a row
  *    that is still `active`, and reports whether it changed one. That is the
  *    single-use submit guard; a double that always answers `true` would let a
@@ -38,7 +38,6 @@ import type {
   FinishGame,
   Game,
   GameCounter,
-  NameClaim,
   NewGame,
   NewPlayer,
   Player,
@@ -73,7 +72,8 @@ function isRanked(player: Player): boolean {
 }
 
 function byBoardOrder(a: Player, b: Player): number {
-  return b.bestScore - a.bestScore || compareText(a.name ?? "", b.name ?? "");
+  // `id` last so the order stays total when two players share a name (ADR 0024).
+  return b.bestScore - a.bestScore || compareText(a.name ?? "", b.name ?? "") || a.id - b.id;
 }
 
 /** A counter row with the count the upserts have reached. */
@@ -238,18 +238,15 @@ export function memoryRepo(): MemoryRepo {
       return { bestScore: updated.bestScore, isPersonalBest };
     },
 
-    async claimName(input: {
+    async setName(input: {
       readonly playerId: number;
       readonly name: string;
       readonly key: string;
       readonly at: number;
-    }): Promise<NameClaim> {
+    }): Promise<void> {
+      // No uniqueness check: names may repeat (ADR 0024). A player overwriting
+      // their own name still bumps the change counter, matching the UPDATE.
       const player = load(input.playerId);
-      for (const other of players.values()) {
-        if (other.id !== player.id && other.nameKey === input.key) {
-          return { ok: false, reason: "taken" };
-        }
-      }
       players.set(player.id, {
         ...player,
         name: input.name,
@@ -257,7 +254,6 @@ export function memoryRepo(): MemoryRepo {
         nameChanges: player.nameChanges + 1,
         nameChangedAt: input.at,
       });
-      return { ok: true };
     },
 
     async deletePlayer(playerId: number): Promise<void> {
@@ -299,23 +295,34 @@ export function memoryRepo(): MemoryRepo {
           (game.totalScore === current.totalScore && compareText(game.id, current.id) < 0);
         if (better) best.set(game.playerId, game);
       }
-      return [...best.values()]
-        .map((game) => ({
-          playerId: game.playerId ?? 0,
-          name: players.get(game.playerId ?? 0)?.name ?? "",
-          bestScore: game.totalScore,
-          gameId: game.id,
-        }))
-        .sort((a, b) => b.bestScore - a.bestScore || compareText(a.name, b.name))
-        .slice(0, Math.max(0, limit));
+      return (
+        [...best.values()]
+          .map((game) => ({
+            playerId: game.playerId ?? 0,
+            name: players.get(game.playerId ?? 0)?.name ?? "",
+            bestScore: game.totalScore,
+            gameId: game.id,
+          }))
+          // `playerId` last, the same total order the global board uses now that
+          // names repeat (ADR 0024 on main).
+          .sort(
+            (a, b) =>
+              b.bestScore - a.bestScore || compareText(a.name, b.name) || a.playerId - b.playerId,
+          )
+          .slice(0, Math.max(0, limit))
+      );
     },
 
     async countPlayersAbove(key: RankKey): Promise<number> {
       let count = 0;
       for (const player of ranked()) {
+        const sameScore = player.bestScore === key.bestScore;
         const better =
           player.bestScore > key.bestScore ||
-          (player.bestScore === key.bestScore && compareText(player.name ?? "", key.name) < 0);
+          (sameScore && compareText(player.name ?? "", key.name) < 0) ||
+          // Names are not unique (ADR 0024); `id` breaks a same-name tie so this
+          // count agrees with the board row's position.
+          (sameScore && compareText(player.name ?? "", key.name) === 0 && player.id < key.id);
         if (better) count += 1;
       }
       return count;

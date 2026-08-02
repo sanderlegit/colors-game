@@ -87,7 +87,7 @@ export const startGame: Handler = async (context: RequestContext): Promise<Respo
   const refusal = await refuseStart(context, player, now);
   if (refusal !== null) return refusal;
 
-  // A challenge plays a seed chosen from an existing finished game (ADR 0024).
+  // A challenge plays a seed chosen from an existing finished game (ADR 0025).
   // The seed and difficulty come off that row, never the request, so the caller
   // still cannot name the numbers it plays; it can only point at a game that was
   // already minted for someone. `memorizeMs` stays the player's own choice — it

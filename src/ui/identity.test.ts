@@ -32,7 +32,6 @@ function setup() {
     hint: must(root.querySelector<HTMLElement>(".identity-hint")),
     named: must(root.querySelector<HTMLElement>(".identity-named")),
     forget: must(root.querySelector<HTMLButtonElement>(".identity-forget")),
-    collision: must(root.querySelector<HTMLElement>(".identity-collision")),
     claim: must(root.querySelector<HTMLButtonElement>(".identity-claim")),
   };
 }
@@ -45,7 +44,7 @@ describe("createIdentity", () => {
   it("is invisible everywhere but the summary (ADR 0011)", () => {
     const { block, section } = setup();
     block.setIdentity({ status: "anonymous" });
-    block.setSubmission({ status: "done", name: null, requested: null, rank: 3 });
+    block.setSubmission({ status: "done", name: null, rank: 3 });
 
     for (const phase of ["idle", "memorize", "picking", "reveal"] as const) {
       block.update(stateWith({ phase }));
@@ -83,9 +82,9 @@ describe("createIdentity", () => {
     // No identity yet, so no form: a claim would have nothing to attach to.
     expect(form.hidden).toBe(true);
 
-    block.setSubmission({ status: "done", name: null, requested: null, rank: 3 });
+    block.setSubmission({ status: "done", name: null, rank: 3 });
     block.setIdentity({ status: "anonymous" });
-    expect(status.textContent).toBe("That puts you 3rd. Claim a name to appear on the board.");
+    expect(status.textContent).toBe("That puts you 3rd. Set a username to appear on the board.");
     expect(form.hidden).toBe(false);
   });
 
@@ -105,16 +104,16 @@ describe("createIdentity", () => {
       [21, "21st"],
       [112, "112th"],
     ] as const) {
-      block.setSubmission({ status: "done", name: "ada", requested: null, rank });
+      block.setSubmission({ status: "done", name: "ada", rank });
       expect(status.textContent, String(rank)).toBe(`You are ${expected} on the board.`);
     }
   });
 
-  it("says nothing about a rank it was not told (a claim from an older session)", () => {
+  it("says nothing about a rank it was not told (a name set from an older session)", () => {
     const { block, status } = setup();
     block.update(stateWith({ phase: "summary" }));
     block.setIdentity({ status: "named", name: "ada" });
-    block.setSubmission({ status: "done", name: "ada", requested: "ada", rank: 0 });
+    block.setSubmission({ status: "done", name: "ada", rank: 0 });
 
     expect(status.textContent).toBe("");
   });
@@ -171,27 +170,6 @@ describe("createIdentity", () => {
 
     expect(status.textContent).toBe("That name is not allowed.");
     expect(form.hidden).toBe(false);
-  });
-
-  it("spells out a name collision rather than pretending the typed name landed", () => {
-    const { block, collision } = setup();
-    block.update(stateWith({ phase: "summary" }));
-    block.setIdentity({ status: "named", name: "ada-2" });
-    block.setSubmission({ status: "done", name: "ada-2", requested: "ada", rank: 3 });
-
-    expect(collision.hidden).toBe(false);
-    expect(collision.textContent).toBe("ada was taken, so you are ada-2.");
-    expect([...collision.querySelectorAll("strong")].map((node) => node.textContent)).toEqual([
-      "ada",
-      "ada-2",
-    ]);
-  });
-
-  it("stays quiet when the name landed as typed", () => {
-    const { block, collision } = setup();
-    block.update(stateWith({ phase: "summary" }));
-    block.setSubmission({ status: "done", name: "ada", requested: "ada", rank: 3 });
-    expect(collision.hidden).toBe(true);
   });
 
   it("shows who you are, with the form gone, once you have a name", () => {

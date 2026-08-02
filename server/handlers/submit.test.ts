@@ -98,14 +98,14 @@ describe("POST /api/games/:gameId/result", () => {
     expect(body).toMatchObject({ name: "Ada", claimed: true });
   });
 
-  it("suffixes a name somebody else already holds", async () => {
+  it("lets a name somebody else already holds be set too (ADR 0024)", async () => {
     const first = createClient();
     await playGame(first, { name: "Ada" });
     // A second player against the same database, with their own cookie jar.
     const second = createClient({ repo: () => first.repo }, "b");
-    // Their own casing survives; only the folded key collided.
+    // Names are not unique, so it lands as typed — no suffix.
     const body = await jsonRecord(await playGame(second, { name: "ADA" }));
-    expect(body).toMatchObject({ name: "ADA-2", claimed: true });
+    expect(body).toMatchObject({ name: "ADA", claimed: true });
   });
 });
 

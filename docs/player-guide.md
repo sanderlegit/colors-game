@@ -43,6 +43,13 @@ It also cares about *which kind* of mistake you made. Getting the hue wrong is
 usually more noticeable than getting the brightness slightly wrong, and the number
 reflects that.
 
+After each round the score screen splits your ΔE into three — **L** (lightness),
+**C** (chroma/saturation) and **h** (hue) — and highlights the one that cost you
+most. It is worth a look: the picker plane only shows hue and saturation, so
+brightness is easy to neglect, and a guess that looks right on the plane can still
+lose the round on lightness alone. The highlighted axis tells you where to aim
+next time.
+
 ## Turning ΔE into a score
 
 Three things the scoring curve is built to do:
@@ -79,14 +86,14 @@ gap however you prefer to read it.
 ## Your name on the leaderboard
 
 There is no account, no password and no email. When you finish a game we offer
-you a name, and if you take one we remember it with a cookie in this browser.
+you a username, and if you set one we remember it with a cookie in this browser.
 
-**A name belongs to a finished game.** You can't claim one before you've played —
-that's what stops somebody sitting there reserving every good name.
+**A username belongs to a finished game.** You can't set one before you've played —
+that's what stops somebody sitting there reserving names.
 
-**If the name you want is taken, you get the next one along.** Ask for `ada` when
-`ada` exists and you become `ada-2`. We tell you when that happens rather than
-quietly giving you a name you didn't ask for.
+**You can pick any name, even one somebody already has.** Ask for `ada` when
+`ada` already exists and you are simply `ada` too — no suffix, no "try another".
+If two of you share a name on the board, the older account sits above.
 
 **Lose the cookie and you lose the name.** Clear your browser data, open a private
 window, or come back on your phone instead of your laptop, and you'll be a new

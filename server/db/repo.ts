@@ -17,18 +17,18 @@
  *   second submission of the same game id changes zero rows and gets `false`,
  *   which is the entire replay defence. Nothing checks-then-writes; the check
  *   *is* the write.
- * - **`claimName` surfaces contention as a value.** A name collision is an
- *   ordinary outcome (the caller auto-suffixes), so it comes back as
- *   `{ ok: false, reason: "taken" }` rather than as an exception. `memory.ts`
- *   has to reproduce that faithfully or the handler tests pass against a lie.
+ * - **`setName` always lands.** Names are not unique (ADR 0024), so setting one
+ *   is a plain write with no contention to report — unlike its predecessor
+ *   `claimName`, which returned `{ ok: false, reason: "taken" }` on a collision.
  *
  * ## Ordering
  *
- * The board is ordered `best_score DESC, name ASC`, which is exactly the
+ * The board is ordered `best_score DESC, name ASC, id ASC`, which is exactly the
  * `players_board` index. `countPlayersAbove` counts under that same order, so a
- * player's rank and their row's position on the board cannot disagree. See the
- * note on `countPlayersAbove` — this is not the tiebreak the brief asked for,
- * and the reason is recorded there.
+ * player's rank and their row's position on the board cannot disagree. The `id`
+ * tiebreak is load-bearing now that names repeat: without it two equal-scoring
+ * `ada`s would tie and the counted rank would disagree with the board. See the
+ * note on `countPlayersAbove`.
  */
 
 import type { Difficulty } from "../../src/domain/round";
@@ -37,7 +37,7 @@ export type GameStatus = "active" | "finished" | "expired";
 
 /**
  * Whether the seed was minted for this game or chosen from an existing one
- * (ADR 0024). Only `open` games may raise `players.best_score`; a `challenge`
+ * (ADR 0025). Only `open` games may raise `players.best_score`; a `challenge`
  * game ranks solely on its seed's board, because a chosen seed the player could
  * pick for being easy must not reach the global board.
  */
@@ -112,8 +112,6 @@ export type AggregateResult = {
   readonly isPersonalBest: boolean;
 };
 
-export type NameClaim = { readonly ok: true } | { readonly ok: false; readonly reason: "taken" };
-
 export type BoardRow = {
   readonly playerId: number;
   readonly name: string;
@@ -123,7 +121,7 @@ export type BoardRow = {
    * `best_game_id`; for a per-seed board it is the game that reached that score
    * on the seed. It is what the client fetches an attempt breakdown from, and
    * what a share link and the "only this seed" filter reference — a stable,
-   * already-public handle that lets the raw `seed` stay server-side (ADR 0024).
+   * already-public handle that lets the raw `seed` stay server-side (ADR 0025).
    */
   readonly gameId: string;
 };
@@ -131,8 +129,16 @@ export type BoardRow = {
 /** The order both the board and the rank count are computed in. */
 export type RankKey = {
   readonly bestScore: number;
-  /** Ties are broken by name, ascending. See `countPlayersAbove`. */
+  /** First tiebreak: name, ascending. See `countPlayersAbove`. */
   readonly name: string;
+  /**
+   * Final tiebreak: player id, ascending. Names are not unique (ADR 0024), so
+   * `(bestScore, name)` alone is not a total order — two players called `ada` on
+   * the same score would tie, and the rank counted here would disagree with the
+   * board row's position. `id` is the unique primary key, so it makes the order
+   * total again; the earlier account sorts first.
+   */
+  readonly id: number;
 };
 
 /**
@@ -248,12 +254,18 @@ export type Repo = {
     readonly at: number;
   }): Promise<AggregateResult>;
 
-  claimName(input: {
+  /**
+   * Set a player's display name. Names are not unique (ADR 0024), so this always
+   * lands — there is no contention to report. `key` is the folded form stored
+   * alongside for display consistency and to mark the row as named
+   * (`name_key IS NOT NULL` is the board's "has a name" predicate).
+   */
+  setName(input: {
     readonly playerId: number;
     readonly name: string;
     readonly key: string;
     readonly at: number;
-  }): Promise<NameClaim>;
+  }): Promise<void>;
 
   /** Removes the player and every game they played. */
   deletePlayer(playerId: number): Promise<void>;
@@ -261,7 +273,7 @@ export type Repo = {
   topPlayers(limit: number): Promise<readonly BoardRow[]>;
 
   /**
-   * The board for one seed (ADR 0024): each named player's best finished,
+   * The board for one seed (ADR 0025): each named player's best finished,
    * unflagged game on `seed`, ordered `total_score DESC, name ASC` — the same
    * order as the global board, so a rank shown here cannot disagree with the
    * row it sits on. Both `open` and `challenge` games count, so the player who
@@ -273,14 +285,16 @@ export type Repo = {
   /**
    * How many ranked players sort above `key`. Rank is that plus one.
    *
-   * **The tiebreak is name, not `finished_at`.** The brief specified
+   * **The tiebreaks are name then id, not `finished_at`.** The brief specified
    * "first to achieve ranks higher", but `players` stores no timestamp for the
    * best game — only `best_game_id` — so that order would need a join through
    * `games` on every rank query, and it would not agree with the
-   * `players_board` index, which is `(best_score DESC, name)`. A rank that
-   * disagrees with the board it is displayed next to is a bug report. If the
-   * `finished_at` tiebreak is wanted, add `best_finished_at` to `players` and
-   * change the index, `topPlayers` and this method in one commit.
+   * `players_board` index, which is `(best_score DESC, name, id)`. A rank that
+   * disagrees with the board it is displayed next to is a bug report. `id` is
+   * the final tiebreak because names are not unique (ADR 0024) and `name` alone
+   * no longer breaks every tie; it is the primary key, so the order is total. If
+   * the `finished_at` tiebreak is wanted instead, add `best_finished_at` to
+   * `players` and change the index, `topPlayers` and this method in one commit.
    */
   countPlayersAbove(key: RankKey): Promise<number>;
 

@@ -5,8 +5,9 @@ import type { NewGame, Repo } from "./repo";
 /**
  * These tests are as much a specification of the Repo port as they are a test of
  * the double. Anything asserted here is something `d1.ts` has to do too — most
- * of all the two behaviours the handlers' correctness rests on: a name collision
- * reported as a value, and `finishGame` refusing a second submission.
+ * of all the behaviours the handlers' correctness rests on: duplicate names
+ * ordered by `id` so rank agrees with the board (ADR 0024), and `finishGame`
+ * refusing a second submission.
  */
 
 const T0 = 1_700_000_000_000;
@@ -30,7 +31,7 @@ async function withPlayer(repo: Repo, hash: string): Promise<number> {
 /** A named player at a score, which is what it takes to reach the board. */
 async function ranked(repo: Repo, hash: string, name: string, score: number): Promise<number> {
   const id = await withPlayer(repo, hash);
-  await repo.claimName({ playerId: id, name, key: name.toLowerCase(), at: T0 });
+  await repo.setName({ playerId: id, name, key: name.toLowerCase(), at: T0 });
   await repo.insertGame(newGame(`g-${hash}`));
   await repo.finishGame({
     gameId: `g-${hash}`,
@@ -117,13 +118,13 @@ describe("players", () => {
   });
 });
 
-describe("claimName", () => {
+describe("setName", () => {
   it("stores the display name and the folded key", async () => {
     const repo = memoryRepo();
     const id = await withPlayer(repo, "h1");
     await expect(
-      repo.claimName({ playerId: id, name: "Ada", key: "ada", at: T0 }),
-    ).resolves.toEqual({ ok: true });
+      repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 }),
+    ).resolves.toBeUndefined();
     await expect(repo.findPlayerByTokenHash("h1")).resolves.toMatchObject({
       name: "Ada",
       nameKey: "ada",
@@ -132,53 +133,31 @@ describe("claimName", () => {
     });
   });
 
-  it("reproduces the uniqueness violation as a value, not an exception", async () => {
-    // The handler resolves a collision by auto-suffixing, so this has to be an
-    // ordinary outcome. A double that threw — or that quietly accepted the
-    // duplicate — would make the suffix path untestable.
+  it("lets two players hold the same name (ADR 0024)", async () => {
+    // No uniqueness: both keep the name they typed. The board stays coherent
+    // because its order carries an `id` tiebreak, not because names differ.
     const repo = memoryRepo();
     const first = await withPlayer(repo, "h1");
     const second = await withPlayer(repo, "h2");
-    await repo.claimName({ playerId: first, name: "Ada", key: "ada", at: T0 });
-    await expect(
-      repo.claimName({ playerId: second, name: "ADA", key: "ada", at: T0 }),
-    ).resolves.toEqual({ ok: false, reason: "taken" });
-  });
-
-  it("leaves the loser of a collision unnamed", async () => {
-    const repo = memoryRepo();
-    const first = await withPlayer(repo, "h1");
-    const second = await withPlayer(repo, "h2");
-    await repo.claimName({ playerId: first, name: "Ada", key: "ada", at: T0 });
-    await repo.claimName({ playerId: second, name: "ADA", key: "ada", at: T0 });
+    await repo.setName({ playerId: first, name: "Ada", key: "ada", at: T0 });
+    await repo.setName({ playerId: second, name: "ADA", key: "ada", at: T0 });
+    await expect(repo.findPlayerByTokenHash("h1")).resolves.toMatchObject({ name: "Ada" });
     await expect(repo.findPlayerByTokenHash("h2")).resolves.toMatchObject({
-      name: null,
-      nameChanges: 0,
+      name: "ADA",
+      nameChanges: 1,
     });
   });
 
-  it("lets a player re-claim their own key, so a recase is not a collision", async () => {
+  it("overwrites a player's own name and bumps the change counter", async () => {
     const repo = memoryRepo();
     const id = await withPlayer(repo, "h1");
-    await repo.claimName({ playerId: id, name: "ada", key: "ada", at: T0 });
-    await expect(
-      repo.claimName({ playerId: id, name: "Ada", key: "ada", at: T0 + 1 }),
-    ).resolves.toEqual({ ok: true });
+    await repo.setName({ playerId: id, name: "ada", key: "ada", at: T0 });
+    await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 + 1 });
     await expect(repo.findPlayerByTokenHash("h1")).resolves.toMatchObject({
       name: "Ada",
       nameChanges: 2,
+      nameChangedAt: T0 + 1,
     });
-  });
-
-  it("frees the key when the holder is deleted", async () => {
-    const repo = memoryRepo();
-    const first = await withPlayer(repo, "h1");
-    const second = await withPlayer(repo, "h2");
-    await repo.claimName({ playerId: first, name: "Ada", key: "ada", at: T0 });
-    await repo.deletePlayer(first);
-    await expect(
-      repo.claimName({ playerId: second, name: "Ada", key: "ada", at: T0 }),
-    ).resolves.toEqual({ ok: true });
   });
 });
 
@@ -514,7 +493,7 @@ describe("the board", () => {
   });
 });
 
-describe("the per-seed board (ADR 0024)", () => {
+describe("the per-seed board (ADR 0025)", () => {
   /** A named player who finished one game on `seed`, scoring `score`. */
   async function onSeed(
     repo: Repo,
@@ -525,7 +504,7 @@ describe("the per-seed board (ADR 0024)", () => {
     over: { readonly id?: string; readonly kind?: "open" | "challenge" } = {},
   ): Promise<string> {
     const id = await withPlayer(repo, hash);
-    await repo.claimName({ playerId: id, name, key: name.toLowerCase(), at: T0 });
+    await repo.setName({ playerId: id, name, key: name.toLowerCase(), at: T0 });
     const gameId = over.id ?? `g-${hash}-${seed}`;
     await repo.insertGame(newGame(gameId, { seed, kind: over.kind ?? "challenge" }));
     await repo.finishGame({
@@ -551,7 +530,7 @@ describe("the per-seed board (ADR 0024)", () => {
   it("keeps each player's best game on the seed, and names that game not their global best", async () => {
     const repo = memoryRepo();
     const id = await withPlayer(repo, "h1");
-    await repo.claimName({ playerId: id, name: "Ada", key: "ada", at: T0 });
+    await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 });
     for (const [gameId, score] of [
       ["low", 200],
       ["high", 480],
@@ -575,7 +554,7 @@ describe("the per-seed board (ADR 0024)", () => {
     const repo = memoryRepo();
     // Flagged: on the seed but off the board.
     const flagged = await withPlayer(repo, "h1");
-    await repo.claimName({ playerId: flagged, name: "Cheat", key: "cheat", at: T0 });
+    await repo.setName({ playerId: flagged, name: "Cheat", key: "cheat", at: T0 });
     await repo.insertGame(newGame("f1", { seed: 7, kind: "challenge" }));
     await repo.finishGame({
       gameId: "f1",
@@ -602,6 +581,9 @@ describe("the per-seed board (ADR 0024)", () => {
 });
 
 describe("countPlayersAbove", () => {
+  // A score that outsorts nobody, standing in for a hypothetical query row.
+  const LAST = Number.MAX_SAFE_INTEGER;
+
   it("agrees with the board's own order for every row", async () => {
     // Rank and board position are displayed next to each other. If they can
     // disagree, that is a bug report — so the invariant is asserted directly.
@@ -612,7 +594,30 @@ describe("countPlayersAbove", () => {
     await ranked(repo, "h4", "Bob", 120);
     const board = await repo.topPlayers(10);
     for (const [index, row] of board.entries()) {
-      const above = await repo.countPlayersAbove({ bestScore: row.bestScore, name: row.name });
+      const above = await repo.countPlayersAbove({
+        bestScore: row.bestScore,
+        name: row.name,
+        id: row.playerId,
+      });
+      expect(above).toBe(index);
+    }
+  });
+
+  it("breaks a same-name, same-score tie by id, agreeing with the board (ADR 0024)", async () => {
+    // Two players called `ada` on the same score. Without the `id` tiebreak
+    // they would tie: both would count the same number above them, and the
+    // counted rank would disagree with the two distinct board rows.
+    const repo = memoryRepo();
+    const first = await ranked(repo, "h1", "ada", 400);
+    const second = await ranked(repo, "h2", "ada", 400);
+    const board = await repo.topPlayers(10);
+    expect(board.map((row) => row.playerId)).toEqual([first, second]);
+    for (const [index, row] of board.entries()) {
+      const above = await repo.countPlayersAbove({
+        bestScore: row.bestScore,
+        name: row.name,
+        id: row.playerId,
+      });
       expect(above).toBe(index);
     }
   });
@@ -621,13 +626,15 @@ describe("countPlayersAbove", () => {
     const repo = memoryRepo();
     await ranked(repo, "h1", "Ada", 400);
     await ranked(repo, "h2", "Grace", 460);
-    await expect(repo.countPlayersAbove({ bestScore: 1, name: "zz" })).resolves.toBe(2);
+    await expect(repo.countPlayersAbove({ bestScore: 1, name: "zz", id: LAST })).resolves.toBe(2);
   });
 
   it("counts nobody for a score above the board", async () => {
     const repo = memoryRepo();
     await ranked(repo, "h1", "Ada", 400);
-    await expect(repo.countPlayersAbove({ bestScore: 500, name: "Ada" })).resolves.toBe(0);
+    await expect(repo.countPlayersAbove({ bestScore: 500, name: "Ada", id: LAST })).resolves.toBe(
+      0,
+    );
   });
 
   it("ignores players who are not on the board", async () => {
@@ -640,7 +647,7 @@ describe("countPlayersAbove", () => {
       ranked: true,
       at: T0,
     });
-    await expect(repo.countPlayersAbove({ bestScore: 10, name: "Ada" })).resolves.toBe(0);
+    await expect(repo.countPlayersAbove({ bestScore: 10, name: "Ada", id: LAST })).resolves.toBe(0);
   });
 });
 

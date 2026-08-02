@@ -44,7 +44,7 @@ export type LeaderboardEntry = {
   /**
    * The game this row's score belongs to. Opaque here — the client never reads a
    * seed — but it is what an attempt breakdown is fetched from, and what the seed
-   * filter and the share link reference (ADR 0024).
+   * filter and the share link reference (ADR 0025).
    */
   readonly gameId: string;
 };
@@ -94,7 +94,7 @@ export type GameApi = {
   me(): Promise<Result<Identity | null>>;
   /**
    * Mint a game. `challengeOf` names an existing game whose seed to play — a
-   * shared challenge (ADR 0024); its result ranks only on that seed's board. Its
+   * shared challenge (ADR 0025); its result ranks only on that seed's board. Its
    * absence is an ordinary open game.
    */
   startRanked(memorizeMs: number, challengeOf?: string): Promise<Result<RankedGame>>;

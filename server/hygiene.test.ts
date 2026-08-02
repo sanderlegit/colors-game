@@ -60,7 +60,7 @@ describe("response hygiene", () => {
       ["me", await client.send("GET", "/api/me")],
       ["result", played],
       ["leaderboard", await client.send("GET", "/api/leaderboard")],
-      // The attempt view and the seed board are the ADR 0024 additions: both
+      // The attempt view and the seed board are the ADR 0025 additions: both
       // replay a stored game, and neither may echo the seed that generated it.
       ["attempt", await client.send("GET", `/api/games/${finished}/attempt`)],
       ["seed-board", await client.send("GET", `/api/leaderboard?forGame=${finished}`)],

@@ -9,10 +9,10 @@ import { playFullGame } from "./support";
  * That file is excluded from the coverage floor because it needs a D1 binding,
  * and until this spec existed it had only ever been run by hand — so a column
  * typo in a statement no handler test can reach would have shipped. One round
- * trip through start → submit → claim → board touches `insertGame`,
+ * trip through start → submit → set username → board touches `insertGame`,
  * `findGame`, `finishGame`, `insertPlayer`, `findPlayerByTokenHash`,
- * `recordFinishedGame`, `claimName`, `topPlayers` and `countPlayersAbove`.
- * Expanding the row and filtering to its seed adds the ADR 0024 statements:
+ * `recordFinishedGame`, `setName`, `topPlayers` and `countPlayersAbove`.
+ * Expanding the row and filtering to its seed adds the ADR 0025 statements:
  * the attempt replay's `findGame`, and `topPlayersBySeed`'s window query — the
  * one bit of SQL a memory double cannot vet.
  *
@@ -22,12 +22,13 @@ import { playFullGame } from "./support";
 
 /**
  * The database is wiped before the server starts (`npm run d1:reset`), so this
- * name lands unsuffixed — and asserting that it did is what proves the wipe, the
- * unique index and `claimAvailableName` all did their jobs.
+ * name lands and appears on the board — proving the wipe, `setName` and the
+ * board query all did their jobs. Names are not unique (ADR 0024), so it lands
+ * exactly as typed.
  */
 const NAME = "Ada Lovelace";
 
-test("start → submit → claim → board, against a real D1", async ({ page }) => {
+test("start → submit → set username → board, against a real D1", async ({ page }) => {
   // Five memorize windows plus the server's own floor on elapsed time.
   test.slow();
 
@@ -49,8 +50,8 @@ test("start → submit → claim → board, against a real D1", async ({ page })
   // so an unnamed player still gets a place.
   await expect(page.getByText(/That puts you \d+/)).toBeVisible();
 
-  await page.getByLabel("Claim a name for the board").fill(NAME);
-  await page.getByRole("button", { name: "Claim", exact: true }).click();
+  await page.getByLabel("Set your username").fill(NAME);
+  await page.getByRole("button", { name: "Set username", exact: true }).click();
   await expect(page.getByText(`Playing as ${NAME}`)).toBeVisible();
 
   await page.getByRole("tab", { name: "Leaderboard" }).click();
@@ -75,7 +76,7 @@ test("start → submit → claim → board, against a real D1", async ({ page })
   await page.getByRole("tab", { name: "Leaderboard" }).click();
   await expect(page.getByRole("rowheader", { name: `${NAME} (you)` })).toBeVisible();
 
-  // ADR 0024: the row expands into the attempt the Worker replayed from the
+  // ADR 0025: the row expands into the attempt the Worker replayed from the
   // stored `seed` and `guesses_json`. Five rounds and the same total prove the
   // replay read a real row back and re-derived the colours.
   await page

@@ -42,7 +42,7 @@ src/
   color/
     types.ts          Srgb, LinearRgb, Xyz, Lab, Oklab, Oklch — branded/nominal
     convert.ts        the conversion chain, one function per hop
-    deltaE.ts         ciede2000(), deltaEOk()
+    deltaE.ts         ciede2000(), ciede2000Components(), deltaEOk()
     gamut.ts          isInGamut(), clipChromaToGamut()
     format.ts         hex parse/format, css color string
     *.test.ts
@@ -64,9 +64,9 @@ src/
                       preview.ts, which is deleted
     menu.ts           idle + summary screen; owns the identity block's mount slot
     breakdown.ts      per-round chips + "Round N (ΔE …)"; shared by menu + attempt
-    identity.ts       name claim, collision line, two-click "forget me" (ADR 0011)
-    leaderboard.ts    the board. setView/setAttempt, never update(state) (ADR 0012, 0024)
-    attempt.ts        the panel a board row expands into (ADR 0024)
+    identity.ts       set-username form, two-click "forget me" (ADR 0011, 0024)
+    leaderboard.ts    the board. setView/setAttempt, never update(state) (ADR 0012, 0025)
+    attempt.ts        the panel a board row expands into (ADR 0025)
     tabs.ts           ARIA tablist, roving tabindex, automatic activation
     render.ts         createGameView(root, deps) -> { update(state), … }
     shell.ts          owns activeTab above createGameView; pushes async data in
@@ -206,7 +206,7 @@ type Shell = {
   update(state: GameState): void;      // the frame loop, unchanged
   setBestScore(score: number): void;
   setLeaderboard(view: LeaderboardView): void;   // pushed when a request settles
-  setAttempt(gameId, view): void;                // an expanded row's replay (ADR 0024)
+  setAttempt(gameId, view): void;                // an expanded row's replay (ADR 0025)
   selectTab(tab): void;                          // a ?board= deep link opening the board
   setIdentity(identity: PlayerIdentity): void;
   setSubmission(submission: SubmitState): void;
@@ -353,9 +353,9 @@ Endpoints (all under `/api`, all same-origin, all `Cache-Control: no-store`):
 | GET | `/health` | 200 `{ok}` — liveness only, **touches no database** |
 | GET | `/health/deep` | 200/503 `{ok, database}` — queries D1. Hand-called; never poll it (ADR 0018) |
 | GET | `/me` | 200 identity, or 204. **Never mints a cookie** |
-| POST | `/games` | 201 `{gameId, seed, roundsTotal}`. Body may carry `challengeOf` — an existing game whose seed to play; the result is a `challenge` (ADR 0024) |
+| POST | `/games` | 201 `{gameId, seed, roundsTotal}`. Body may carry `challengeOf` — an existing game whose seed to play; the result is a `challenge` (ADR 0025) |
 | POST | `/games/:gameId/result` | 200 the scored submission |
-| GET | `/games/:gameId/attempt` | 200 `{totalScore, rounds[]}` — a finished game replayed with its colours, for the board's expandable row (ADR 0024). Public; no seed |
+| GET | `/games/:gameId/attempt` | 200 `{totalScore, rounds[]}` — a finished game replayed with its colours, for the board's expandable row (ADR 0025). Public; no seed |
 | POST | `/name` | 200 `{name}` |
 | DELETE | `/me` | 204, plus the clearing cookie |
 | GET | `/leaderboard` | 200 `{entries[]}`. `?forGame=<gameId>` returns that game's seed's board; each entry carries `gameId` |
@@ -372,7 +372,7 @@ three are asserted in `server/**/*.test.ts`:
 
 - **`seed`, `difficulty` and `memorize_ms` are read from the `games` row**, never
   from the submit body. `memorize_ms` in particular sets the minimum-playtime
-  threshold (ADR 0015). Since ADR 0024, `games.kind` (`open` | `challenge`) is
+  threshold (ADR 0015). Since ADR 0025, `games.kind` (`open` | `challenge`) is
   read the same way: a `challenge` game replayed a seed *chosen* from another
   game, so it never raises `players.best_score` — the segregation that keeps
   chosen seeds off the global board. `submit.ts` reads `kind`, not the request.

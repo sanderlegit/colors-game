@@ -42,7 +42,7 @@ import { decodeSubmit, readJsonBody, type SubmitBody } from "../decode";
 import { jsonResponse, problem } from "../http/json";
 import { currentPlayer, mintPlayer, rankOf } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
-import { claimAvailableName } from "../names";
+import { setPlayerName } from "../names";
 import { replayGame } from "../replay";
 import { storedGuesses } from "../stored";
 import { submissionCounters } from "../telemetry";
@@ -78,7 +78,7 @@ async function replayStored(
   }
 
   const scored = replayGame(game.seed, game.difficulty, storedGuesses(game));
-  const rank = await rankOf(context, player.bestScore, player.name);
+  const rank = await rankOf(context, player.bestScore, player.name, player.id);
 
   return jsonResponse(
     200,
@@ -176,7 +176,7 @@ export const submitResult: Handler = async (
     totalScore: scored.totalScore,
     // A challenge game is never ranked on the *global* board however clean it is:
     // its seed was chosen, and a chosen seed the player could pick for being easy
-    // must not raise `best_score` (ADR 0024, upholding ADR 0015). It still counts
+    // must not raise `best_score` (ADR 0025, upholding ADR 0015). It still counts
     // as played and still ranks on its own seed's board.
     ranked: scored.flags === 0 && game.kind === "open",
     at: now,
@@ -185,7 +185,7 @@ export const submitResult: Handler = async (
   const landed =
     submitted.name === undefined
       ? null
-      : await claimAvailableName(context.repo, player.id, submitted.name, now);
+      : await setPlayerName(context.repo, player.id, submitted.name, now);
   const name = landed ?? player.name;
 
   return jsonResponse(
@@ -193,7 +193,7 @@ export const submitResult: Handler = async (
     {
       totalScore: scored.totalScore,
       rounds: scored.rounds,
-      rank: await rankOf(context, aggregate.bestScore, name),
+      rank: await rankOf(context, aggregate.bestScore, name, player.id),
       isPersonalBest: aggregate.isPersonalBest,
       name,
       claimed: landed !== null,

@@ -42,7 +42,7 @@ IDLE ──start──▶ MEMORIZE ──timer elapsed──▶ PICKING ──co
 | `idle`     | Title, "Play" button, best score                                                       | `START`             |
 | `memorize` | Swatch filled with the target color + a 5s countdown ring. Preview panel is empty/dim | timer reaches 0     |
 | `picking`  | Swatch area cross-faded into the picker; preview panel shows the live guess; Confirm   | `CONFIRM`           |
-| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, your-vs-target coords (ADR 0009) | `NEXT`              |
+| `reveal`   | Picker held in place with a red target reticle beside the guess; ΔE00, score, total, per-axis ΔE breakdown, your-vs-target coords (ADR 0009) | `NEXT`              |
 | `summary`  | Per-round breakdown, total score, best-ever, replay + share-seed                        | `RESTART`           |
 
 - **Rounds per game: 5.** Long enough to smooth out luck, short enough for one sitting.
@@ -143,6 +143,12 @@ has moved the picker at least once (prevents scoring a neutral gray by accident)
   your-vs-target coordinates spelled out (ADR 0009). This is a learning aid, not
   a scoring change, and it appears only once the round is over: nothing about the
   target reaches the DOM during `picking` (§9.4 holds).
+- The reveal **breaks the ΔE down by axis** — lightness / chroma / hue — and
+  lights the one that cost the most, and draws the lightness gap as a segment on
+  the bar. Because the plane carries hue and chroma but not lightness, a guess can
+  sit on the target reticle and still lose the round on lightness alone; the
+  breakdown names why. It is recomputed from the two colours for display only
+  (`ciede2000Components`), never fed back into the score.
 - Game score = sum of round scores (max 500).
 
 Scoring invariants, enforced as property tests (§9.2):
@@ -163,10 +169,12 @@ store for settings and for the offline best score.
 **Amended by ADR 0015**, which is where the player-visible rules of ranked play
 live. Four of them the UI has to be able to say out loud:
 
-- **A name is claimed after a game, not before.** An identity with no completed
+- **A username is set after a game, not before.** An identity with no completed
   game cannot hold one.
-- **A taken name comes back suffixed** — `ada` → `ada-2` — and the server's answer
-  is the name that landed. The client renders that, never what was typed.
+- **Names are not unique** (ADR 0024). Two players may both be `ada`; the name
+  you type is the name that lands, with no suffix. The server's answer is still
+  the name that landed (its own trimmed, own-cased form), and the client renders
+  that.
 - **A ranked game that comes back faster than it could be played is refused**, as
   is one submitted more than 30 minutes after it was issued.
 - **Submitting the same finished game twice is safe** and answers the same result.
@@ -194,12 +202,13 @@ There is no account and nothing to sign into. A name is a 32-byte token in a
 first-party cookie the server sets (ADR 0011):
 
 - **It is minted by submitting a score, never by arriving.** A visitor who never
-  finishes a game has no cookie and no row, so the claim form appears on the
-  summary screen and nowhere else.
+  finishes a game has no cookie and no row, so the set-username form appears on
+  the summary screen and nowhere else.
 - **The client cannot read its own identity.** Every identity-touching response
   echoes the canonical name, and the UI renders *that*, never what was typed.
-- **A taken name comes back suffixed** — `ada` → `ada-2` — and the UI says so in
-  words rather than silently showing a name nobody asked for.
+- **Names are not unique** (ADR 0024). The name you set is the name you get; two
+  players sharing a name is an ordinary outcome, and the board keeps them apart
+  and stably ordered by account age.
 - **Lose the cookie, lose the name.** Cleared storage, a private window or a
   second device is a fresh identity. There is no recovery code, by decision.
 - **"Forget me" is a real delete**, behind a two-click confirm (the button
@@ -217,7 +226,7 @@ Best game score per player, one row each, with your own row marked by
 colour alone (§8). It loads when the tab is opened, not at boot, and an empty
 board is a successful answer rather than an error.
 
-**A row expands into that attempt** (ADR 0024). Tapping a row slides a panel out
+**A row expands into that attempt** (ADR 0025). Tapping a row slides a panel out
 beneath it — the same per-round breakdown the summary screen shows (target and
 guess chips, `Round N`, score and ΔE), for a game this browser never played. The
 panel is the server *replaying* the stored game, not the seed handed over: nothing
@@ -231,7 +240,7 @@ that filtered board. From there, **Play this seed** starts a game on the same
 colours. A game played this way is a *challenge*: it ranks on that seed's board
 but **never raises your global best score**, because its seed was chosen and a
 chosen seed you could pick for being easy must not reach the global board
-(ADR 0015, ADR 0024). The client never names a seed — it points at an existing
+(ADR 0015, ADR 0025). The client never names a seed — it points at an existing
 game, and the server reads the seed off that row.
 
 ### 7.3 Unranked games

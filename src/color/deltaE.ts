@@ -43,11 +43,20 @@ function huePrime(bStar: number, aPrime: number): number {
 }
 
 /**
- * CIEDE2000 with kL = kC = kH = 1. Symmetric to the bit: every term that changes
- * sign under swapping the arguments appears either squared or as a product of
- * two such terms.
+ * The three weighted differences CIEDE2000 combines, plus its rotation term.
+ * `termL/termC/termH` are `ΔL'/S_L`, `ΔC'/S_C`, `ΔH'/S_H` — signed, because the
+ * `R_T` cross-term needs the sign (see the module header). `ciede2000` folds them
+ * into the metric; `ciede2000Components` reads their magnitudes as a per-axis
+ * attribution of the error.
  */
-export function ciede2000(a: Lab, b: Lab): number {
+type Ciede2000Terms = {
+  readonly termL: number;
+  readonly termC: number;
+  readonly termH: number;
+  readonly rt: number;
+};
+
+function ciede2000Terms(a: Lab, b: Lab): Ciede2000Terms {
   const chroma1 = Math.hypot(a.a, a.b);
   const chroma2 = Math.hypot(b.a, b.b);
   const meanChroma7 = ((chroma1 + chroma2) / 2) ** 7;
@@ -102,7 +111,37 @@ export function ciede2000(a: Lab, b: Lab): number {
   const termC = deltaC / sC;
   const termH = deltaH / sH;
 
+  return { termL, termC, termH, rt };
+}
+
+/**
+ * CIEDE2000 with kL = kC = kH = 1. Symmetric to the bit: every term that changes
+ * sign under swapping the arguments appears either squared or as a product of
+ * two such terms.
+ */
+export function ciede2000(a: Lab, b: Lab): number {
+  const { termL, termC, termH, rt } = ciede2000Terms(a, b);
   return Math.sqrt(termL * termL + termC * termC + termH * termH + rt * termC * termH);
+}
+
+/**
+ * How much of the ΔE00 each axis accounts for: the magnitude of that axis's
+ * weighted term, which is the distance that axis's error would contribute on its
+ * own. Their quadrature sum is the full ΔE00 up to the `R_T` rotation term, which
+ * is zero unless *both* chroma and hue err and only bites near hue 275° (blue);
+ * folding it in would rob the axis attribution of its meaning, so it is dropped
+ * here. This drives the reveal breakdown, never the score — the score stays the
+ * exact `ciede2000` total (`src/domain/scoring.ts`).
+ */
+export type DeltaComponents = {
+  readonly lightness: number;
+  readonly chroma: number;
+  readonly hue: number;
+};
+
+export function ciede2000Components(a: Lab, b: Lab): DeltaComponents {
+  const { termL, termC, termH } = ciede2000Terms(a, b);
+  return { lightness: Math.abs(termL), chroma: Math.abs(termC), hue: Math.abs(termH) };
 }
 
 /**

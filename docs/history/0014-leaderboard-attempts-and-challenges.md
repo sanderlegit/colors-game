@@ -1,7 +1,7 @@
 # 0013 — Leaderboard attempts and seed challenges
 
 2026-08-02. Made a board row expand into that game's score screen, and turned a
-seed into a shareable, playable challenge (ADR 0024). `npm run verify`, both e2e
+seed into a shareable, playable challenge (ADR 0025). `npm run verify`, both e2e
 projects, and `e2e:backend` all green.
 
 ## The design pivot the hygiene test forced

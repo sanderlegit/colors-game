@@ -34,18 +34,17 @@ import { currentPlayer, rankOf } from "../identity";
 /** On the board only with a name and a score, which is the partial index's rule. */
 async function rankFor(
   context: RequestContext,
-  name: string | null,
-  bestScore: number,
+  player: { readonly id: number; readonly name: string | null; readonly bestScore: number },
 ): Promise<number | null> {
-  if (name === null || bestScore <= 0) return null;
-  return rankOf(context, bestScore, name);
+  if (player.name === null || player.bestScore <= 0) return null;
+  return rankOf(context, player.bestScore, player.name, player.id);
 }
 
 export const getMe: Handler = async (context: RequestContext): Promise<Response> => {
   const player = await currentPlayer(context);
   if (player === null) return noContent();
 
-  const rank = await rankFor(context, player.name, player.bestScore);
+  const rank = await rankFor(context, player);
   context.ctx.waitUntil(context.repo.touchPlayer(player.id, context.deps.now()));
 
   return jsonResponse(200, {

@@ -57,7 +57,7 @@ const IMPROBABLE_DELTA_E = 0.5;
 export type RoundReport = { readonly deltaE: number; readonly score: number };
 
 /**
- * A round with the colours that produced it (ADR 0024), for the attempt view a
+ * A round with the colours that produced it (ADR 0025), for the attempt view a
  * leaderboard row expands into. The `target` is derived from `(seed, roundIndex,
  * difficulty)` by the same `generateTarget` the client runs, so no colour maths
  * happens twice and the seed itself never has to leave the server to draw it —

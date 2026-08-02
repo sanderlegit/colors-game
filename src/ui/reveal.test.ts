@@ -139,6 +139,37 @@ describe("createReveal", () => {
     expect(text(root, ".reveal-score")).toBe("81");
   });
 
+  it("breaks the ΔE down by axis and lights the dominant one", () => {
+    const root = mount();
+    const reveal = createReveal(root, { onNext: () => {} });
+    // TARGET (0.6, 0.15, 210) vs GUESS (0.55, 0.11, 195): hue is the largest
+    // contributor, then lightness, then chroma.
+    reveal.update(revealed([{ deltaE: 10.62, score: 62 }]));
+
+    const cells = [...root.querySelectorAll<HTMLElement>(".reveal-breakdown-axis")];
+    expect(cells.map((c) => c.dataset.axis)).toEqual(["lightness", "chroma", "hue"]);
+
+    const byAxis = (axis: string): HTMLElement =>
+      must(cells.find((c) => c.dataset.axis === axis) ?? null);
+    const value = (axis: string): number =>
+      Number(must(byAxis(axis).querySelector(".reveal-breakdown-value")).textContent);
+
+    expect(value("hue")).toBeGreaterThan(value("lightness"));
+    expect(value("lightness")).toBeGreaterThan(value("chroma"));
+    expect(byAxis("hue").classList.contains("is-dominant")).toBe(true);
+    expect(byAxis("lightness").classList.contains("is-dominant")).toBe(false);
+    expect(byAxis("chroma").classList.contains("is-dominant")).toBe(false);
+  });
+
+  it("keeps the breakdown blank until the round is scored", () => {
+    const root = mount();
+    const reveal = createReveal(root, { onNext: () => {} });
+    reveal.update(picking());
+
+    const values = [...root.querySelectorAll(".reveal-breakdown-value")].map((v) => v.textContent);
+    expect(values).toEqual(["—", "—", "—"]);
+  });
+
   it("labels the exit by where it leads", () => {
     const root = mount();
     const reveal = createReveal(root, { onNext: () => {} });

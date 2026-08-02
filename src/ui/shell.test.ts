@@ -170,7 +170,7 @@ describe("createShell", () => {
 
     shell.setLeaderboard({ status: "ready", entries: FIXTURE_LEADERBOARD });
     shell.setIdentity({ status: "named", name: "ada" });
-    shell.setSubmission({ status: "done", name: "ada", requested: null, rank: 3 });
+    shell.setSubmission({ status: "done", name: "ada", rank: 3 });
 
     expect(root.querySelectorAll(".leaderboard-row")).toHaveLength(3);
     expect(must(root.querySelector(".identity-named")).textContent).toContain("ada");

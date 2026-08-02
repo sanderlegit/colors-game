@@ -153,7 +153,7 @@ describe("start limits", () => {
   });
 });
 
-describe("POST /api/games — seed challenges (ADR 0024)", () => {
+describe("POST /api/games — seed challenges (ADR 0025)", () => {
   /** A finished game on `seed`, owned by an unnamed player, to challenge against. */
   async function origin(client: Client, seed: number): Promise<string> {
     const player = await client.repo.insertPlayer({ tokenHash: `o-${seed}`, at: client.now() });
@@ -227,7 +227,7 @@ describe("POST /api/games — seed challenges (ADR 0024)", () => {
       body: { guesses: GUESSES, name: "Pat" },
     });
 
-    // The chosen seed cannot raise the global best score (ADR 0015, ADR 0024).
+    // The chosen seed cannot raise the global best score (ADR 0015, ADR 0025).
     const player = await client.repo.findPlayerByTokenHash(`hash:${client.token()}`);
     expect(player?.bestScore).toBe(0);
     expect(names(await jsonRecord(await client.send("GET", "/api/leaderboard")))).toEqual([]);

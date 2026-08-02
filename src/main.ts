@@ -175,7 +175,6 @@ function main(): void {
       shell.setSubmission({
         status: "done",
         name: res.value.name,
-        requested: null,
         rank: res.value.rank,
       });
     }
@@ -198,7 +197,6 @@ function main(): void {
     shell.setSubmission({
       status: "done",
       name: res.value.name,
-      requested: name,
       rank: submitted?.rank ?? 0,
     });
   }

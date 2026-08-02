@@ -59,7 +59,7 @@ export type StartGameBody = {
   readonly memorizeMs: number;
   readonly difficulty: Difficulty;
   /**
-   * The game whose seed to play, or absent for a fresh open game (ADR 0024). It
+   * The game whose seed to play, or absent for a fresh open game (ADR 0025). It
    * names a game, never a seed — the seed and difficulty are read from that row
    * server-side, so a caller still cannot choose the numbers it plays against.
    */
@@ -83,7 +83,7 @@ export type SubmitBody = {
   readonly name?: string;
 };
 
-/** A validated display name and the folded key its uniqueness is enforced on. */
+/** A validated display name and its folded key (see `nameKey`). */
 export type NameBody = { readonly name: string; readonly key: string };
 
 /**
@@ -223,17 +223,17 @@ export function decodeSubmit(body: Record<string, unknown>): SubmitBody | null {
 }
 
 /**
- * Fold a display name to the key uniqueness is enforced on.
+ * Fold a display name to its stored key.
  *
  * NFKC first, so the fullwidth and compatibility forms of a name collapse onto
- * it instead of standing beside it on the board looking identical. Then case
- * folding, then whitespace collapsing — "Ada  Lovelace" and "ada lovelace" are
- * one name to a reader, so they are one name to the index.
+ * one form. Then case folding, then whitespace collapsing — "Ada  Lovelace" and
+ * "ada lovelace" fold to the same key. Names are no longer unique (ADR 0024), so
+ * the key is not an arbiter; it is stored to mark a row as named
+ * (`name_key IS NOT NULL`) and to keep a single folded form should a later
+ * feature — a rename limit, a search — want one.
  *
  * This is not confusable detection and does not pretend to be: Cyrillic "а" is
- * still a different key from Latin "a". Homoglyph folding needs a table we would
- * have to ship and keep current, which is a dependency and an ADR, and the worst
- * it prevents is impersonation on a colour-matching leaderboard.
+ * still a different key from Latin "a".
  */
 export function nameKey(name: string): string {
   return name.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
@@ -262,7 +262,7 @@ export function decodeName(body: Record<string, unknown>): NameBody | null {
   const name = raw.replace(/\s+/g, " ").trim();
   if (name === "") return null;
   const key = nameKey(name);
-  // NFKC can lengthen a string, and the key is what the unique index holds — so
-  // the key is what the bound has to apply to.
+  // NFKC can lengthen a string, and the key is what is stored — so the key is
+  // what the bound has to apply to.
   return key === "" || [...key].length > MAX_NAME_LENGTH ? null : { name, key };
 }

@@ -33,7 +33,6 @@ import type {
   Game,
   GameKind,
   GameStatus,
-  NameClaim,
   NewGame,
   NewPlayer,
   Player,
@@ -116,12 +115,6 @@ const ORPHAN_PLAYERS = `SELECT id FROM players
    WHERE games_played = 0 AND created_at < ?1
    ORDER BY id
    LIMIT ?2`;
-
-/** SQLite reports a partial unique index by the column it is built on. */
-function isNameCollision(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes("UNIQUE constraint failed") && message.includes("name_key");
-}
 
 export function d1Repo(db: D1Database): Repo {
   /** `first()` without a type argument is already `Record<string, unknown>` — no assertion. */
@@ -248,29 +241,23 @@ export function d1Repo(db: D1Database): Repo {
       return { bestScore: num(row, "best_score"), isPersonalBest: num(row, "is_best") === 1 };
     },
 
-    async claimName(input: {
+    async setName(input: {
       readonly playerId: number;
       readonly name: string;
       readonly key: string;
       readonly at: number;
-    }): Promise<NameClaim> {
-      try {
-        await db
-          .prepare(
-            `UPDATE players
-                SET name = ?1, name_key = ?2,
-                    name_changes = name_changes + 1, name_changed_at = ?3
-              WHERE id = ?4`,
-          )
-          .bind(input.name, input.key, input.at, input.playerId)
-          .run();
-        return { ok: true };
-      } catch (error) {
-        // Contention on a name is an ordinary outcome the caller resolves by
-        // suffixing, so it comes back as a value. Anything else is a fault.
-        if (isNameCollision(error)) return { ok: false, reason: "taken" };
-        throw error;
-      }
+    }): Promise<void> {
+      // Names are not unique (ADR 0024), so there is no index to violate and
+      // nothing to catch — a plain conditional-free update.
+      await db
+        .prepare(
+          `UPDATE players
+              SET name = ?1, name_key = ?2,
+                  name_changes = name_changes + 1, name_changed_at = ?3
+            WHERE id = ?4`,
+        )
+        .bind(input.name, input.key, input.at, input.playerId)
+        .run();
     },
 
     async deletePlayer(playerId: number): Promise<void> {
@@ -293,7 +280,7 @@ export function d1Repo(db: D1Database): Repo {
         .prepare(
           `SELECT id, name, best_score, best_game_id FROM players
             WHERE name_key IS NOT NULL AND best_score > 0 AND best_game_id IS NOT NULL
-            ORDER BY best_score DESC, name ASC
+            ORDER BY best_score DESC, name ASC, id ASC
             LIMIT ?1`,
         )
         .bind(limit)
@@ -311,6 +298,8 @@ export function d1Repo(db: D1Database): Repo {
       // window picks one row per player under `total_score DESC, id ASC`, so a
       // player's own ties break deterministically and `game_id` is the game that
       // actually reached the score — not `best_game_id`, which is a global fact.
+      // The outer order ends in `player_id`, the same total order the global
+      // board gained when names stopped being unique (ADR 0024 on main).
       const result = await db
         .prepare(
           `SELECT player_id, name, best_score, game_id FROM (
@@ -324,7 +313,7 @@ export function d1Repo(db: D1Database): Repo {
                 AND p.name_key IS NOT NULL
            )
            WHERE rn = 1
-           ORDER BY best_score DESC, name ASC
+           ORDER BY best_score DESC, name ASC, player_id ASC
            LIMIT ?2`,
         )
         .bind(seed, limit)
@@ -341,9 +330,12 @@ export function d1Repo(db: D1Database): Repo {
       return count(
         `SELECT COUNT(*) AS n FROM players
           WHERE name_key IS NOT NULL AND best_score > 0
-            AND (best_score > ?1 OR (best_score = ?1 AND name < ?2))`,
+            AND (best_score > ?1
+                 OR (best_score = ?1 AND name < ?2)
+                 OR (best_score = ?1 AND name = ?2 AND id < ?3))`,
         key.bestScore,
         key.name,
+        key.id,
       );
     },
 

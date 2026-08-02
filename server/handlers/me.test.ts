@@ -48,12 +48,14 @@ describe("GET /api/me", () => {
   });
 
   it("echoes the canonical name, because the client cannot read the cookie", async () => {
+    // The stored, trimmed form is echoed back — and it may equal another
+    // player's name, since names are not unique (ADR 0024).
     const first = createClient();
-    await playGame(first, { name: "Ada" });
+    await playGame(first, { name: "ada" });
     const second = createClient({ repo: () => first.repo }, "b");
-    await playGame(second, { name: "ada" });
+    await playGame(second, { name: "  ada  " });
     await expect(jsonRecord(await second.send("GET", "/api/me"))).resolves.toMatchObject({
-      name: "ada-2",
+      name: "ada",
     });
   });
 });

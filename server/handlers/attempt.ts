@@ -1,7 +1,7 @@
 /**
  * `GET /api/games/:gameId/attempt` → 200 `{ totalScore, rounds[] }`.
  *
- * The breakdown a leaderboard row expands into (ADR 0024): for a finished game,
+ * The breakdown a leaderboard row expands into (ADR 0025): for a finished game,
  * every round replayed into `{ deltaE, score, target, guess }`. It is the same
  * data the summary screen shows for the game you just played, for a game you did
  * not — so the colours are computed by replaying the pure core, never read from
@@ -16,7 +16,7 @@
  *
  * **No seed leaves here.** The response carries the replayed colours, not the
  * seed that generated them, so the one-response seed rule (`hygiene.test.ts`,
- * ADR 0024) holds. Nor does it carry a name — the row the panel opened from
+ * ADR 0025) holds. Nor does it carry a name — the row the panel opened from
  * already shows it.
  */
 
