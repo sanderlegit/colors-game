@@ -63,7 +63,7 @@ src/
                       picking, then ΔE, score, your-vs-target coords. Replaced
                       preview.ts, which is deleted
     menu.ts           idle + summary screen; owns the identity block's mount slot
-    identity.ts       name claim, collision line, two-click "forget me" (ADR 0011)
+    identity.ts       set-username form, two-click "forget me" (ADR 0011, 0024)
     leaderboard.ts    the board. setView(view), never update(state) (ADR 0012)
     tabs.ts           ARIA tablist, roving tabindex, automatic activation
     render.ts         createGameView(root, deps) -> { update(state), … }

@@ -43,7 +43,7 @@ import { decodeGuesses, decodeSubmit, readJsonBody, type SubmitBody } from "../d
 import { jsonResponse, problem } from "../http/json";
 import { currentPlayer, mintPlayer, rankOf } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
-import { claimAvailableName } from "../names";
+import { setPlayerName } from "../names";
 import { replayGame } from "../replay";
 import { submissionCounters } from "../telemetry";
 
@@ -96,7 +96,7 @@ async function replayStored(
   }
 
   const scored = replayGame(game.seed, game.difficulty, storedGuesses(game));
-  const rank = await rankOf(context, player.bestScore, player.name);
+  const rank = await rankOf(context, player.bestScore, player.name, player.id);
 
   return jsonResponse(
     200,
@@ -199,7 +199,7 @@ export const submitResult: Handler = async (
   const landed =
     submitted.name === undefined
       ? null
-      : await claimAvailableName(context.repo, player.id, submitted.name, now);
+      : await setPlayerName(context.repo, player.id, submitted.name, now);
   const name = landed ?? player.name;
 
   return jsonResponse(
@@ -207,7 +207,7 @@ export const submitResult: Handler = async (
     {
       totalScore: scored.totalScore,
       rounds: scored.rounds,
-      rank: await rankOf(context, aggregate.bestScore, name),
+      rank: await rankOf(context, aggregate.bestScore, name, player.id),
       isPersonalBest: aggregate.isPersonalBest,
       name,
       claimed: landed !== null,

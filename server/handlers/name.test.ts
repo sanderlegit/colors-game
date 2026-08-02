@@ -49,48 +49,19 @@ describe("POST /api/name", () => {
     expect(response.status).toBe(400);
   });
 
-  it("lets a player recase their own name without colliding with themselves", async () => {
+  it("lets a player recase their own name", async () => {
     const client = createClient();
     await playGame(client);
     await claim(client, "ada");
     await expect(jsonRecord(await claim(client, "Ada"))).resolves.toEqual({ name: "Ada" });
   });
 
-  it("suffixes around a taken name and answers with what landed", async () => {
+  it("lets a name somebody else already holds be set as-is (ADR 0024)", async () => {
+    // No suffix, no refusal: names are not unique, so the second `Ada` is `Ada`.
     const first = createClient();
     await playGame(first, { name: "Ada" });
     const second = createClient({ repo: () => first.repo }, "b");
     await playGame(second);
-    await expect(jsonRecord(await claim(second, "Ada"))).resolves.toEqual({ name: "Ada-2" });
-  });
-
-  it("walks the numbered ladder, then falls back to something random", async () => {
-    // Bounded on purpose: a squatter holding every numbered variant must not be
-    // able to make each later claim cost an unbounded number of writes.
-    const host = createClient();
-    await playGame(host, { name: "Ada" });
-    for (let n = 2; n <= 8; n += 1) {
-      const holder = createClient({ repo: () => host.repo }, `h${n}`);
-      await playGame(holder);
-      await expect(jsonRecord(await claim(holder, "Ada"))).resolves.toEqual({ name: `Ada-${n}` });
-    }
-
-    const last = createClient({ repo: () => host.repo }, "last");
-    await playGame(last);
-    const body = await jsonRecord(await claim(last, "Ada"));
-    expect(String(body.name)).toMatch(/^Ada-[2-9b-z]{4}$/);
-  });
-
-  it("keeps a suffixed name inside the length a board row can show", async () => {
-    // `src/platform/api.ts` refuses a name past the bound, so an overlong
-    // suffixed name would make the whole response unreadable to the client.
-    const full = "a".repeat(MAX_NAME_LENGTH);
-    const first = createClient();
-    await playGame(first, { name: full });
-    const second = createClient({ repo: () => first.repo }, "b");
-    await playGame(second);
-    const body = await jsonRecord(await claim(second, full));
-    expect([...String(body.name)].length).toBeLessThanOrEqual(MAX_NAME_LENGTH);
-    expect(String(body.name).endsWith("-2")).toBe(true);
+    await expect(jsonRecord(await claim(second, "Ada"))).resolves.toEqual({ name: "Ada" });
   });
 });
