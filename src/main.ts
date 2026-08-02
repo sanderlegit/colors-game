@@ -41,7 +41,6 @@ import { createShell } from "@/ui/shell";
 
 /** SPEC §7 as amended by ADR 0016: an unranked game is a whole game, minus the board. */
 const UNRANKED = "Played offline, so this one is not eligible for the board.";
-const FORGOTTEN = "Forgotten. Your name and your scores are off the board.";
 
 /**
  * The readout's hex value.
@@ -98,7 +97,6 @@ function main(): void {
     leaderboard: { onRetry: () => void loadBoard() },
     identity: {
       onClaim: (name: string) => void claimName(name),
-      onForget: () => void forget(),
     },
     onTabSelect: (tab) => {
       if (tab === "leaderboard") void loadBoard();
@@ -170,31 +168,19 @@ function main(): void {
     shell.setSubmission({ status: "sending" });
     const res = await api.claimName(name);
     if (!res.ok) {
-      // The identity is still anonymous, so the form comes back and the server's
-      // verdict is rendered above it, verbatim.
+      // Identity is unchanged, so the form stays up — the anonymous set form, or
+      // the rename form — with the server's verdict rendered above it, verbatim.
       shell.setSubmission({ status: "failed", message: res.error.message });
       return;
     }
+    // Both the first set and a rename land here: the identity becomes (or stays)
+    // named, which is also what closes the rename form in the identity block.
     shell.setIdentity({ status: "named", name: res.value.name });
     shell.setSubmission({
       status: "done",
       name: res.value.name,
       rank: submitted?.rank ?? 0,
     });
-  }
-
-  async function forget(): Promise<void> {
-    const res = await api.forget();
-    if (!res.ok) {
-      shell.setSubmission({ status: "failed", message: res.error.message });
-      return;
-    }
-    // The delete cascades, so the game this summary describes is gone with it —
-    // there is nothing left to submit or claim against.
-    submitted = null;
-    playing = null;
-    shell.setIdentity({ status: "unknown" });
-    shell.setSubmission({ status: "unavailable", message: FORGOTTEN });
   }
 
   async function loadBoard(): Promise<void> {

@@ -1,20 +1,26 @@
 /**
- * The set-username block on the summary screen (ADR 0011, ADR 0012).
+ * The username block on the summary screen (ADR 0011, ADR 0012, ADR 0025).
  *
  * It appears **only at `summary`**, because an identity is created by submitting
  * a score and never by arriving: a username form on the idle screen would be a
  * button that can only fail. Visibility is therefore derived from the phase,
  * which is why this component takes `update(state)` while the board does not.
  *
- * Client-side validation is non-empty-after-trim plus `maxlength`, and nothing
- * else. Mirroring the server's name rules here would drift, and the first
- * symptom of the drift is the client refusing a name the server would have
- * accepted. Every other verdict is the server's and is rendered back verbatim.
+ * Two things a player can do here, both through the same form and the same
+ * `POST /api/name`:
  *
- * The form is shown when we *know* a named identity does not yet exist —
- * `anonymous` — rather than whenever a game ended. That is also what makes a
- * rejected submission retryable: the identity is still anonymous, so the form
- * comes back with the server's message above it.
+ * - **Set a name** while `anonymous` — the first name after a game.
+ * - **Change name** while `named` — "Change name" reveals the form pre-filled;
+ *   submitting overwrites (`setName`, ADR 0024). Scores and board position are
+ *   kept; a rename is not a new identity.
+ *
+ * There is **no forget/delete** here (ADR 0025): deletion is an operator action
+ * (`just delete-player`), so the block never destroys anything.
+ *
+ * Client-side validation is non-empty-after-trim plus `maxlength`, and nothing
+ * else. Mirroring the server's name rules here would drift, and the first symptom
+ * is the client refusing a name the server would accept. Every other verdict is
+ * the server's and is rendered back verbatim.
  */
 
 import type { GameState } from "@/domain/state";
@@ -38,7 +44,6 @@ export type SubmitState =
 
 export type IdentityHandlers = {
   readonly onClaim: (name: string) => void;
-  readonly onForget: () => void;
 };
 
 export type IdentityBlock = {
@@ -51,8 +56,6 @@ export type IdentityBlock = {
 
 const SENDING = "Sending your score to the board…";
 const EMPTY_NAME = "Type a name first.";
-const FORGET = "Forget me";
-const FORGET_ARMED = "Really forget me?";
 
 /** 1st, 2nd, 3rd — with the teens, which every naive version gets wrong. */
 function ordinal(rank: number): string {
@@ -72,8 +75,8 @@ function ordinal(rank: number): string {
 
 /**
  * A rank of 0 means "not known here": the server ranks every submission
- * (ADR 0015), so it only happens for a name claimed against an identity carried
- * over from an earlier session. Saying nothing beats inventing a place.
+ * (ADR 0015), so it only happens for a name set against an identity carried over
+ * from an earlier session. Saying nothing beats inventing a place.
  */
 function statusLine(submission: SubmitState): string {
   switch (submission.status) {
@@ -116,7 +119,6 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   const label = document.createElement("label");
   label.className = "identity-label";
   label.htmlFor = "identity-name";
-  label.textContent = "Set your username";
 
   const field = document.createElement("div");
   field.className = "identity-field";
@@ -129,15 +131,20 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   input.autocomplete = "off";
   input.maxLength = MAX_NAME_LENGTH;
 
-  const claim = document.createElement("button");
-  claim.type = "submit";
-  claim.className = "identity-claim";
-  claim.textContent = "Set username";
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.className = "identity-claim";
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "identity-cancel";
+  cancel.textContent = "Cancel";
+  cancel.hidden = true;
 
   const hint = document.createElement("p");
   hint.className = "identity-hint";
 
-  field.append(input, claim);
+  field.append(input, submit, cancel);
   form.append(label, field, hint);
 
   const named = document.createElement("p");
@@ -145,12 +152,12 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   named.hidden = true;
   const nameValue = strong("");
   nameValue.className = "identity-name";
-  const forget = document.createElement("button");
-  forget.type = "button";
-  forget.className = "identity-forget";
-  forget.textContent = FORGET;
+  const rename = document.createElement("button");
+  rename.type = "button";
+  rename.className = "identity-rename";
+  rename.textContent = "Change name";
   named.append(document.createTextNode("Playing as "), nameValue, document.createTextNode(" "));
-  named.append(forget);
+  named.append(rename);
 
   section.append(status, form, named);
   root.append(section);
@@ -158,13 +165,10 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   let identity: PlayerIdentity = { status: "unknown" };
   let submission: SubmitState = { status: "idle" };
   let phase: GameState["phase"] = "idle";
-  let armed = false;
+  // True while a named player is editing their name. Anonymous first-set does not
+  // use it — the form is already the only thing shown.
+  let renaming = false;
   let renderedKey: string | null = null;
-
-  function renderForget(): void {
-    forget.textContent = armed ? FORGET_ARMED : FORGET;
-    forget.classList.toggle("is-armed", armed);
-  }
 
   function render(): void {
     // ADR 0011: identity is minted by submitting a score, so the block has
@@ -174,9 +178,9 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
       visible ? "1" : "0",
       identity.status,
       identity.status === "named" ? identity.name : "",
+      renaming ? "rename" : "",
       submission.status,
       statusLine(submission),
-      submission.status === "done" ? `${submission.name}` : "",
     ].join("|");
     if (key === renderedKey) return;
     renderedKey = key;
@@ -186,15 +190,18 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
 
     status.textContent = statusLine(submission);
 
+    const formVisible = identity.status === "anonymous" || renaming;
+    form.hidden = !formVisible;
+    label.textContent = renaming ? "Change your username" : "Set your username";
+    submit.textContent = renaming ? "Save" : "Set username";
+    cancel.hidden = !renaming;
+
     const sending = submission.status === "sending";
-    form.hidden = identity.status !== "anonymous";
     input.disabled = sending;
-    claim.disabled = sending;
+    submit.disabled = sending;
 
-    named.hidden = identity.status !== "named";
+    named.hidden = identity.status !== "named" || renaming;
     if (identity.status === "named") nameValue.textContent = identity.name;
-
-    renderForget();
   }
 
   function onSubmit(event: Event): void {
@@ -209,31 +216,26 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
     handlers.onClaim(name);
   }
 
-  /**
-   * Two clicks, not `window.confirm`: the dialog blocks the rAF loop the whole
-   * game runs on. Arming reverts on blur, so a stray tap cannot leave a live
-   * destructive button behind (ADR 0011).
-   */
-  function onForgetClick(): void {
-    if (!armed) {
-      armed = true;
-      renderForget();
-      return;
-    }
-    armed = false;
-    renderForget();
-    handlers.onForget();
+  function onRename(): void {
+    if (identity.status !== "named") return;
+    renaming = true;
+    input.value = identity.name;
+    hint.textContent = "";
+    render();
+    input.focus();
+    input.select();
   }
 
-  function onForgetBlur(): void {
-    if (!armed) return;
-    armed = false;
-    renderForget();
+  function onCancel(): void {
+    renaming = false;
+    hint.textContent = "";
+    input.value = "";
+    render();
   }
 
   form.addEventListener("submit", onSubmit);
-  forget.addEventListener("click", onForgetClick);
-  forget.addEventListener("blur", onForgetBlur);
+  rename.addEventListener("click", onRename);
+  cancel.addEventListener("click", onCancel);
 
   function update(state: GameState): void {
     phase = state.phase;
@@ -241,8 +243,11 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
   }
 
   function setIdentity(next: PlayerIdentity): void {
+    // A new identity value is the answer to a set/rename (or a fresh load), so
+    // editing is over and the input is cleared for its next use.
     identity = next;
-    if (next.status !== "anonymous") input.value = "";
+    renaming = false;
+    input.value = "";
     render();
   }
 
@@ -253,8 +258,8 @@ export function createIdentity(root: HTMLElement, handlers: IdentityHandlers): I
 
   function destroy(): void {
     form.removeEventListener("submit", onSubmit);
-    forget.removeEventListener("click", onForgetClick);
-    forget.removeEventListener("blur", onForgetBlur);
+    rename.removeEventListener("click", onRename);
+    cancel.removeEventListener("click", onCancel);
     section.remove();
   }
 

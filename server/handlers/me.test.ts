@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createClient, jsonRecord, playGame } from "../app.fixture";
-import { IDENTITY_COOKIE } from "../http/cookie";
 
 describe("GET /api/me", () => {
   it("answers 204 to a browser that has never played", async () => {
@@ -60,46 +59,14 @@ describe("GET /api/me", () => {
   });
 });
 
-describe("DELETE /api/me", () => {
-  it("forgets the player, their games and their name", async () => {
+describe("no self-serve delete (ADR 0025)", () => {
+  it("has no DELETE /api/me — deletion is an operator action", async () => {
     const client = createClient();
     await playGame(client, { name: "Ada" });
-    const token = client.token();
-
+    // The route is gone; the router answers 405 for a method it does not have.
     const response = await client.send("DELETE", "/api/me");
-    expect(response.status).toBe(204);
-    await expect(client.repo.findPlayerByTokenHash(`hash:${token}`)).resolves.toBeNull();
-    await expect(client.repo.topPlayers(10)).resolves.toEqual([]);
-  });
-
-  it("sends a clearing cookie the browser will actually match", async () => {
-    // Same Path, Secure and SameSite as the cookie was set with, or some
-    // browsers treat it as a different cookie and delete nothing.
-    const client = createClient();
-    await playGame(client);
-    const cookie = client.send("DELETE", "/api/me");
-    const header = (await cookie).headers.get("set-cookie") ?? "";
-    expect(header).toContain(`${IDENTITY_COOKIE}=;`);
-    expect(header).toContain("Path=/");
-    expect(header).toContain("Secure");
-    expect(header).toContain("SameSite=Strict");
-    expect(header).toContain("Max-Age=0");
-    expect(client.token()).toBeNull();
-  });
-
-  it("answers 204 to a caller who had nothing to forget", async () => {
-    const client = createClient();
-    expect((await client.send("DELETE", "/api/me")).status).toBe(204);
-    expect((await client.send("DELETE", "/api/me", { cookie: "ghost" })).status).toBe(204);
-  });
-
-  it("frees the name for somebody else", async () => {
-    const first = createClient();
-    await playGame(first, { name: "Ada" });
-    await first.send("DELETE", "/api/me");
-    const second = createClient({ repo: () => first.repo }, "b");
-    await expect(jsonRecord(await playGame(second, { name: "Ada" }))).resolves.toMatchObject({
-      name: "Ada",
-    });
+    expect(response.status).toBe(405);
+    // The player and their board row are untouched.
+    await expect(client.repo.topPlayers(10)).resolves.toMatchObject([{ name: "Ada" }]);
   });
 });

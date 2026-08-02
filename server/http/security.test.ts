@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createClient } from "../app.fixture";
+import { createClient, playGame } from "../app.fixture";
 import { CONTENT_SECURITY_POLICY, SECURITY_HEADERS, secured } from "./security";
 
 /**
@@ -98,9 +98,10 @@ describe("every API response", () => {
 
   it("keeps Set-Cookie, which a naive header copy loses", async () => {
     // Set-Cookie is the header most likely to be mangled by a rebuild, and the
-    // identity depends on it surviving intact.
+    // identity depends on it surviving intact. The first submission mints the
+    // identity and is the response that carries the cookie.
     const client = createClient();
-    const response = await client.send("DELETE", "/api/me");
+    const response = await playGame(client);
     expect(response.headers.get("set-cookie")).toContain("colors_id=");
   });
 });
