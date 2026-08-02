@@ -110,9 +110,17 @@ function toGame(row: Record<string, unknown>): Game {
  * The orphan set, written once and interpolated into both statements of
  * `deleteOrphanedPlayers` so that they cannot select different rows. It is a
  * constant with no caller input in it; the cutoff and the limit are bound.
+ *
+ * `name_key IS NULL` is load-bearing, not belt-and-braces. ADR 0011/0023 justify
+ * this pass on the premise that a `games_played = 0` row "holds no name and no
+ * board position, so nothing is lost". That premise held only because a name can
+ * only be claimed after a finished game (`handlers/name.ts`). A bulk
+ * `UPDATE players SET games_played = 0` — as the leaderboard reset does
+ * (`migrations/0005`) — breaks it, leaving named identities that would otherwise
+ * be swept. Gating on `name_key` restores the invariant the pass claims to have.
  */
 const ORPHAN_PLAYERS = `SELECT id FROM players
-   WHERE games_played = 0 AND created_at < ?1
+   WHERE games_played = 0 AND name_key IS NULL AND created_at < ?1
    ORDER BY id
    LIMIT ?2`;
 
