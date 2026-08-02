@@ -1,0 +1,119 @@
+-- A synthetic backup, produced by `wrangler d1 export` from a seeded local D1.
+--
+-- It exists so `scripts/restore-drill.mjs` runs on every push with no Cloudflare
+-- credentials: that run proves the drill still works, so the weekly drill in
+-- `.github/workflows/backup.yml` is not the thing that discovers it rotted.
+--
+-- Every value here is invented. The `token_hash` columns are counting patterns,
+-- not hashes of anything, and no row corresponds to a person. Regenerate with:
+--
+--   npx wrangler d1 migrations apply colors --local
+--   npx wrangler d1 execute colors --local --command "<seed rows>"
+--   npx wrangler d1 export colors --local --output scripts/backup.fixture.sql
+--   node scripts/restore-drill.mjs --dump scripts/backup.fixture.sql \
+--     > scripts/backup.fixture.manifest.json
+
+PRAGMA defer_foreign_keys=TRUE;
+CREATE TABLE IF NOT EXISTS "d1_migrations"(
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		name       TEXT UNIQUE,
+		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-01 23:40:33');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-01 23:40:33');
+CREATE TABLE players (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  
+  
+  token_hash TEXT NOT NULL UNIQUE,
+  
+  
+  name TEXT,
+  name_key TEXT,
+  name_changes INTEGER NOT NULL DEFAULT 0,
+  name_changed_at INTEGER,
+  best_score INTEGER NOT NULL DEFAULT 0,
+  best_game_id TEXT,
+  games_played INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL
+);
+INSERT INTO "players" ("id","token_hash","name","name_key","name_changes","name_changed_at","best_score","best_game_id","games_played","created_at","last_seen_at") VALUES(1,'0000000000000000000000000000000000000000000000000000000000000001','Ada','ada',1,1754000000000,412,'g1',7,1753900000000,1754100000000);
+INSERT INTO "players" ("id","token_hash","name","name_key","name_changes","name_changed_at","best_score","best_game_id","games_played","created_at","last_seen_at") VALUES(2,'0000000000000000000000000000000000000000000000000000000000000002','Grace','grace',1,1754000100000,388,'g2',4,1753900100000,1754100100000);
+INSERT INTO "players" ("id","token_hash","name","name_key","name_changes","name_changed_at","best_score","best_game_id","games_played","created_at","last_seen_at") VALUES(3,'0000000000000000000000000000000000000000000000000000000000000003',NULL,NULL,0,NULL,0,NULL,1,1753900200000,1754100200000);
+CREATE TABLE games (
+  
+  
+  
+  id TEXT PRIMARY KEY,
+  
+  
+  player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,                   
+  seed INTEGER NOT NULL,
+  difficulty TEXT NOT NULL,
+  memorize_ms INTEGER NOT NULL,
+  
+  
+  
+  total_score INTEGER NOT NULL DEFAULT 0,
+  guesses_json TEXT,
+  
+  
+  flags INTEGER NOT NULL DEFAULT 0,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER
+);
+INSERT INTO "games" ("id","player_id","status","seed","difficulty","memorize_ms","total_score","guesses_json","flags","started_at","finished_at") VALUES('g1',1,'finished',41762,'normal',5000,412,'[]',0,1753990000000,1753990043000);
+INSERT INTO "games" ("id","player_id","status","seed","difficulty","memorize_ms","total_score","guesses_json","flags","started_at","finished_at") VALUES('g2',2,'finished',22114,'normal',8000,388,'[]',0,1753990100000,1753990160000);
+CREATE TABLE mint_buckets (
+  bucket TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (bucket, day)
+) WITHOUT ROWID;
+INSERT INTO "mint_buckets" ("bucket","day","count") VALUES('abc',20300,4);
+CREATE TABLE round_stats (
+  day TEXT NOT NULL,
+  difficulty TEXT NOT NULL,
+  memorize_ms INTEGER NOT NULL,
+  round_index INTEGER NOT NULL,
+  delta_e_bucket INTEGER NOT NULL,
+  hue_bucket INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  PRIMARY KEY (day, difficulty, memorize_ms, round_index, delta_e_bucket, hue_bucket)
+) WITHOUT ROWID;
+INSERT INTO "round_stats" ("day","difficulty","memorize_ms","round_index","delta_e_bucket","hue_bucket","n") VALUES('2026-08-01','normal',5000,0,4,2,3);
+INSERT INTO "round_stats" ("day","difficulty","memorize_ms","round_index","delta_e_bucket","hue_bucket","n") VALUES('2026-08-01','normal',5000,1,9,7,2);
+CREATE TABLE game_stats (
+  day TEXT NOT NULL,
+  difficulty TEXT NOT NULL,
+  memorize_ms INTEGER NOT NULL,
+  event TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  PRIMARY KEY (day, difficulty, memorize_ms, event)
+) WITHOUT ROWID;
+INSERT INTO "game_stats" ("day","difficulty","memorize_ms","event","n") VALUES('2026-08-01','normal',5000,'completed',5);
+INSERT INTO "game_stats" ("day","difficulty","memorize_ms","event","n") VALUES('2026-08-01','normal',5000,'started',9);
+CREATE TABLE client_errors (
+  fingerprint TEXT NOT NULL,
+  day TEXT NOT NULL,
+  message TEXT NOT NULL,
+  stack TEXT,
+  n INTEGER NOT NULL,
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  PRIMARY KEY (fingerprint, day)
+) WITHOUT ROWID;
+INSERT INTO "client_errors" ("fingerprint","day","message","stack","n","first_seen_at","last_seen_at") VALUES('deadbeef','2026-08-01','TypeError: nope','at update',2,1754000000000,1754000500000);
+DELETE FROM sqlite_sequence;
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',2);
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('players',3);
+CREATE UNIQUE INDEX players_name_key ON players(name_key) WHERE name_key IS NOT NULL;
+CREATE INDEX players_board ON players(best_score DESC, name)
+  WHERE name_key IS NOT NULL AND best_score > 0;
+CREATE INDEX players_idle ON players(last_seen_at);
+CREATE INDEX games_player_started ON games(player_id, started_at DESC);
+CREATE INDEX games_daily ON games(finished_at DESC) WHERE status = 'finished' AND flags = 0;
+CREATE INDEX games_sweep ON games(started_at) WHERE status = 'active';
+CREATE INDEX client_errors_day ON client_errors(day);

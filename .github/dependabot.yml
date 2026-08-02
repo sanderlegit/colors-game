@@ -1,0 +1,44 @@
+version: 2
+
+# Every dependency here is a dev dependency — the shipped bundle is our own code
+# and the runtime dependency count is zero by standing decision (ADR 0001,
+# CLAUDE.md). That does not make the tree harmless: `npm ci` executes the dev
+# tree's install hooks, which is exactly how the 2025 "Shai-Hulud" worm spread.
+# CI runs `npm ci --ignore-scripts`; this keeps the tree current so there is less
+# for that to have to survive.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    # One PR for the whole toolchain by default. Six separate PRs against a
+    # single-maintainer repo is how updates stop being reviewed at all — and CI
+    # gates each one on `verify`, `e2e` and the restore drill regardless.
+    groups:
+      dev-dependencies:
+        patterns: ["*"]
+        # Majors on their own: `wrangler` and `typescript` majors have both
+        # broken this repo's build before (TS 7 removed `baseUrl`), and a major
+        # buried in a group of nine is a major nobody read.
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    # Actions run with our Cloudflare credentials in the deploy job, so a stale
+    # pinned action is a supply-chain risk and not merely old.
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope

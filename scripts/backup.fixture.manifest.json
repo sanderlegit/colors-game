@@ -1,0 +1,15 @@
+{
+  "counts": {
+    "d1_migrations": 2,
+    "players": 3,
+    "games": 2,
+    "mint_buckets": 1,
+    "round_stats": 2,
+    "game_stats": 2,
+    "client_errors": 1
+  },
+  "leaderboard": {
+    "rows": 2,
+    "checksum": "27abf11d11c5bfb53dffceb2008e064226ccf6ca4854be66b92541b1203f9895"
+  }
+}

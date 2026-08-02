@@ -1,0 +1,101 @@
+name: Backup
+
+# Weekly, plus a button. Weekly is enough at this volume — the whole database is
+# a few thousand rows — and it is the interval that stays true: a daily job that
+# nobody looks at is the same as a weekly one, with seven times the noise.
+on:
+  schedule:
+    # 03:17 UTC on Sundays. Deliberately not on the hour: GitHub's scheduler
+    # queues heavily at :00 and a job that starts late is a job that looks broken.
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+# ## Why this exists when D1 has Time Travel
+#
+# D1's Time Travel gives point-in-time recovery with no setup at all, and it is
+# the right first answer to "I broke a table ten minutes ago". It is not a
+# backup:
+#
+#   * Retention on the free plan is **7 days**. Anything you notice in week two
+#     is not recoverable.
+#   * A restore **overwrites in place**. There is no "restore beside it and
+#     compare", which is exactly what you want when you are not yet sure what
+#     went wrong.
+#   * It lives in the same account as the thing it protects. An account-level
+#     problem — a mis-scoped API token, a deleted database, a billing lapse —
+#     takes both.
+#
+# So: a weekly export to somewhere that is not Cloudflare, and a drill that
+# proves the export is restorable.
+
+jobs:
+  export:
+    name: Export and drill the restore
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+
+      # See ci.yml for why `--ignore-scripts`.
+      - run: npm ci --ignore-scripts
+
+      - name: Name the backup
+        id: name
+        run: echo "stamp=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      # The manifest is queried from the *live* database, seconds before the
+      # export, and the drill below compares the restored copy against it. That
+      # is what turns "the file downloaded" into "the file reproduces the state
+      # we had": a truncated export, a partial one, or one taken mid-write all
+      # produce a dump that loads cleanly and fails this comparison.
+      - name: Record what production currently holds
+        run: |
+          set -euo pipefail
+          node scripts/live-manifest.mjs > "backup-${STAMP}.manifest.json"
+          cat "backup-${STAMP}.manifest.json"
+        env:
+          STAMP: ${{ steps.name.outputs.stamp }}
+
+      - name: Export the database
+        run: npx wrangler d1 export colors --remote --output "backup-${STAMP}.sql"
+        env:
+          STAMP: ${{ steps.name.outputs.stamp }}
+
+      # The part everybody skips. See scripts/restore-drill.mjs for why it is
+      # automated rather than a calendar reminder.
+      - name: Restore it into a scratch database and check it
+        run: |
+          node scripts/restore-drill.mjs \
+            --dump "backup-${STAMP}.sql" \
+            --manifest "backup-${STAMP}.manifest.json"
+        env:
+          STAMP: ${{ steps.name.outputs.stamp }}
+
+      # Off-platform, which is the point: GitHub is not Cloudflare, so an
+      # account-level failure on either side leaves the other holding a copy.
+      # 90 days of weekly exports is ~13 restore points against Time Travel's 7
+      # days. Retention here is the ceiling on how far back a mistake can be
+      # noticed and still fixed.
+      - name: Keep it somewhere that is not Cloudflare
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ steps.name.outputs.stamp }}
+          path: |
+            backup-*.sql
+            backup-*.manifest.json
+          retention-days: 90
+          if-no-files-found: error
