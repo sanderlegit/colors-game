@@ -90,6 +90,8 @@ describe("GET /api/games/:gameId/attempt", () => {
       guessesJson: JSON.stringify(GUESSES),
       flags: 2,
       finishedAt: client.now(),
+      name: null,
+      nameKey: null,
     });
     const response = await client.send("GET", "/api/games/flagged/attempt");
     expect(response.status).toBe(404);

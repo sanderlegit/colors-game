@@ -174,6 +174,8 @@ describe("POST /api/games — seed challenges (ADR 0026)", () => {
       guessesJson: JSON.stringify(GUESSES),
       flags: 0,
       finishedAt: client.now(),
+      name: null,
+      nameKey: null,
     });
     return id;
   }

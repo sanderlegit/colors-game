@@ -147,6 +147,8 @@ describe("stale active games", () => {
       guessesJson: "[]",
       flags: 0,
       finishedAt: at,
+      name: null,
+      nameKey: null,
     });
     // The second half of what `handlers/submit.ts` does. Without it the player
     // is an orphan and the orphan pass takes the game with them — which is the

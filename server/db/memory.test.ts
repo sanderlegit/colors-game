@@ -40,6 +40,8 @@ async function ranked(repo: Repo, hash: string, name: string, score: number): Pr
     guessesJson: "[]",
     flags: 0,
     finishedAt: T0,
+    name: null,
+    nameKey: null,
   });
   await repo.recordFinishedGame({
     playerId: id,
@@ -198,6 +200,8 @@ describe("finishGame — the single-use submit guard", () => {
       guessesJson: "[]",
       flags: 0,
       finishedAt: T0 + 60_000,
+      name: null,
+      nameKey: null,
     });
 
   it("finalises an active game and records everything", async () => {
@@ -212,6 +216,25 @@ describe("finishGame — the single-use submit guard", () => {
       guessesJson: "[]",
       finishedAt: T0 + 60_000,
     });
+  });
+
+  it("snapshots the name the game was submitted under (ADR 0029)", async () => {
+    // The name lands on the game, not just the identity, so a later rename can
+    // never rewrite it. Null name/key is the "played before naming" case above.
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    await repo.insertGame(newGame("g1"));
+    await repo.finishGame({
+      gameId: "g1",
+      playerId: id,
+      totalScore: 300,
+      guessesJson: "[]",
+      flags: 0,
+      finishedAt: T0 + 60_000,
+      name: "Ada",
+      nameKey: "ada",
+    });
+    expect(await repo.findGame("g1")).toMatchObject({ name: "Ada", nameKey: "ada" });
   });
 
   it("changes nothing on a second submission", async () => {
@@ -229,6 +252,8 @@ describe("finishGame — the single-use submit guard", () => {
         guessesJson: "[]",
         flags: 0,
         finishedAt: T0 + 90_000,
+        name: null,
+        nameKey: null,
       }),
     ).resolves.toBe(false);
     expect(await repo.findGame("g1")).toMatchObject({ totalScore: 412, finishedAt: T0 + 60_000 });
@@ -405,6 +430,8 @@ describe("countGamesStartedSince", () => {
         guessesJson: "[]",
         flags: 0,
         finishedAt: startedAt,
+        name: null,
+        nameKey: null,
       });
     };
     await attach("old", mine, T0 - 100);
@@ -514,6 +541,8 @@ describe("the per-seed board (ADR 0026)", () => {
       guessesJson: "[]",
       flags: 0,
       finishedAt: T0,
+      name: null,
+      nameKey: null,
     });
     return gameId;
   }
@@ -543,6 +572,8 @@ describe("the per-seed board (ADR 0026)", () => {
         guessesJson: "[]",
         flags: 0,
         finishedAt: T0,
+        name: null,
+        nameKey: null,
       });
     }
     expect(await repo.topPlayersBySeed(55, 10)).toEqual([
@@ -563,6 +594,8 @@ describe("the per-seed board (ADR 0026)", () => {
       guessesJson: "[]",
       flags: 1,
       finishedAt: T0,
+      name: null,
+      nameKey: null,
     });
     // Unnamed: played the seed but has no name to show.
     const nameless = await withPlayer(repo, "h2");
@@ -574,6 +607,8 @@ describe("the per-seed board (ADR 0026)", () => {
       guessesJson: "[]",
       flags: 0,
       finishedAt: T0,
+      name: null,
+      nameKey: null,
     });
     await onSeed(repo, "h3", "Ada", 7, 300);
     expect((await repo.topPlayersBySeed(7, 10)).map((row) => row.name)).toEqual(["Ada"]);

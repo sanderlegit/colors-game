@@ -38,7 +38,7 @@
 import { ROUNDS_PER_GAME } from "../../src/domain/state";
 import type { Handler, RequestContext } from "../context";
 import type { Game, Player } from "../db/repo";
-import { decodeSubmit, readJsonBody, type SubmitBody } from "../decode";
+import { decodeSubmit, nameKey, readJsonBody, type SubmitBody } from "../decode";
 import { jsonResponse, problem } from "../http/json";
 import { currentPlayer, mintPlayer, rankOf } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
@@ -137,6 +137,12 @@ export const submitResult: Handler = async (
   }
 
   const scored = replayGame(game.seed, game.difficulty, submitted.guesses);
+  // The name the game is submitted under, snapshotted onto the row (ADR 0029):
+  // the name in this submission if it carries one, else the identity's current
+  // name. Null when neither exists yet. A later rename never rewrites this.
+  const submittedName = submitted.name;
+  const gameName = submittedName ?? player.name;
+  const gameNameKey = submittedName === undefined ? player.nameKey : nameKey(submittedName);
   const finished = await context.repo.finishGame({
     gameId: game.id,
     playerId: player.id,
@@ -144,6 +150,8 @@ export const submitResult: Handler = async (
     guessesJson: JSON.stringify(submitted.guesses),
     flags: scored.flags,
     finishedAt: now,
+    name: gameName,
+    nameKey: gameNameKey,
   });
   if (!finished) {
     // Somebody finished it between the read and the write. Re-read and answer

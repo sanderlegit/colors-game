@@ -194,6 +194,8 @@ export function memoryRepo(): MemoryRepo {
         kind: input.kind,
         startedAt: input.startedAt,
         finishedAt: null,
+        name: null,
+        nameKey: null,
       });
     },
 
@@ -212,6 +214,8 @@ export function memoryRepo(): MemoryRepo {
         guessesJson: input.guessesJson,
         flags: input.flags,
         finishedAt: input.finishedAt,
+        name: input.name,
+        nameKey: input.nameKey,
       });
       return true;
     },
