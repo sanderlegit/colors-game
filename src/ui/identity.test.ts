@@ -17,21 +17,20 @@ function setup() {
   const root = document.createElement("div");
   document.body.append(root);
   const onClaim = vi.fn<(name: string) => void>();
-  const onForget = vi.fn();
-  const block = createIdentity(root, { onClaim, onForget });
+  const block = createIdentity(root, { onClaim });
 
   return {
     root,
     block,
     onClaim,
-    onForget,
     section: must(root.querySelector<HTMLElement>(".identity")),
     status: must(root.querySelector<HTMLElement>(".identity-status")),
     form: must(root.querySelector<HTMLFormElement>(".identity-form")),
     input: must(root.querySelector<HTMLInputElement>(".identity-input")),
     hint: must(root.querySelector<HTMLElement>(".identity-hint")),
     named: must(root.querySelector<HTMLElement>(".identity-named")),
-    forget: must(root.querySelector<HTMLButtonElement>(".identity-forget")),
+    rename: must(root.querySelector<HTMLButtonElement>(".identity-rename")),
+    cancel: must(root.querySelector<HTMLButtonElement>(".identity-cancel")),
     claim: must(root.querySelector<HTMLButtonElement>(".identity-claim")),
   };
 }
@@ -172,66 +171,81 @@ describe("createIdentity", () => {
     expect(form.hidden).toBe(false);
   });
 
-  it("shows who you are, with the form gone, once you have a name", () => {
-    const { block, form, named } = setup();
+  it("shows who you are, with a Change name button, once you have a name", () => {
+    const { block, form, named, rename } = setup();
     block.update(stateWith({ phase: "summary" }));
     block.setIdentity({ status: "named", name: "ada" });
 
     expect(named.hidden).toBe(false);
     expect(named.textContent).toContain("Playing as ada");
+    expect(rename.hidden).toBe(false);
     expect(form.hidden).toBe(true);
   });
 
-  it("needs two clicks to forget, and forgets on the second", () => {
-    const { block, onForget, forget } = setup();
+  it("Change name reveals the form pre-filled with the current name (ADR 0025)", () => {
+    const { block, form, named, input, claim, cancel, rename } = setup();
     block.update(stateWith({ phase: "summary" }));
     block.setIdentity({ status: "named", name: "ada" });
 
-    forget.click();
-    expect(onForget).not.toHaveBeenCalled();
-    expect(forget.textContent).toBe("Really forget me?");
+    rename.click();
 
-    forget.click();
-    expect(onForget).toHaveBeenCalledTimes(1);
-    expect(forget.textContent).toBe("Forget me");
+    expect(form.hidden).toBe(false);
+    expect(named.hidden).toBe(true);
+    expect(input.value).toBe("ada");
+    // The button and label say "change", not "set".
+    expect(claim.textContent).toBe("Save");
+    expect(cancel.hidden).toBe(false);
   });
 
-  it("disarms the forget button when it loses focus", () => {
-    const { block, onForget, forget } = setup();
+  it("sends a rename through the same handler as the first set", () => {
+    const { block, onClaim, input, claim, rename } = setup();
     block.update(stateWith({ phase: "summary" }));
     block.setIdentity({ status: "named", name: "ada" });
 
-    forget.click();
-    forget.dispatchEvent(new FocusEvent("blur"));
-    expect(forget.textContent).toBe("Forget me");
+    rename.click();
+    input.value = "Ada Lovelace";
+    claim.click();
 
-    forget.click();
-    expect(onForget).not.toHaveBeenCalled();
+    expect(onClaim).toHaveBeenCalledWith("Ada Lovelace");
   });
 
-  it("survives the frame loop: an armed button is not reset by an update", () => {
-    const { block, forget } = setup();
-    const summary = stateWith({ phase: "summary" });
-    block.update(summary);
+  it("Cancel leaves rename without calling the handler and restores the name line", () => {
+    const { block, onClaim, form, named, cancel, rename } = setup();
+    block.update(stateWith({ phase: "summary" }));
     block.setIdentity({ status: "named", name: "ada" });
 
-    forget.click();
-    block.update(summary);
-    block.update(summary);
+    rename.click();
+    cancel.click();
 
-    expect(forget.textContent).toBe("Really forget me?");
+    expect(onClaim).not.toHaveBeenCalled();
+    expect(form.hidden).toBe(true);
+    expect(named.hidden).toBe(false);
+    expect(named.textContent).toContain("Playing as ada");
+  });
+
+  it("closes the rename form once the new name has landed", () => {
+    const { block, form, named } = setup();
+    block.update(stateWith({ phase: "summary" }));
+    block.setIdentity({ status: "named", name: "ada" });
+
+    block.setIdentity({ status: "named", name: "ada" });
+    // The rename form is reopened, then the server answers with the new name.
+    must(named.querySelector<HTMLButtonElement>(".identity-rename")).click();
+    block.setIdentity({ status: "named", name: "Ada Lovelace" });
+
+    expect(form.hidden).toBe(true);
+    expect(named.textContent).toContain("Playing as Ada Lovelace");
   });
 
   it("removes itself and its listeners on destroy", () => {
-    const { root, block, onForget, forget } = setup();
+    const { root, block, onClaim, rename } = setup();
     block.update(stateWith({ phase: "summary" }));
     block.setIdentity({ status: "named", name: "ada" });
 
     block.destroy();
-    forget.click();
-    forget.click();
+    rename.click();
 
     expect(root.querySelector(".identity")).toBeNull();
-    expect(onForget).not.toHaveBeenCalled();
+    expect(onClaim).not.toHaveBeenCalled();
   });
 });

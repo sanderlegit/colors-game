@@ -29,12 +29,11 @@ function setup() {
   const onTabSelect = vi.fn<(tab: TabId) => void>();
   const onRetry = vi.fn();
   const onClaim = vi.fn<(name: string) => void>();
-  const onForget = vi.fn();
 
   const shell = createShell(root, {
     game: { dispatch: () => {}, createPicker: stubPicker, nextSeed: () => 1 },
     leaderboard: { onRetry },
-    identity: { onClaim, onForget },
+    identity: { onClaim },
     onTabSelect,
   });
 

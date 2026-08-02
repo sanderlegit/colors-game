@@ -209,11 +209,14 @@ first-party cookie the server sets (ADR 0011):
 - **Names are not unique** (ADR 0024). The name you set is the name you get; two
   players sharing a name is an ordinary outcome, and the board keeps them apart
   and stably ordered by account age.
+- **You can change your name whenever** (ADR 0025). "Change name" reopens the
+  form pre-filled; setting a new name overwrites the old one and keeps your
+  scores and board position — a rename is not a new identity.
 - **Lose the cookie, lose the name.** Cleared storage, a private window or a
   second device is a fresh identity. There is no recovery code, by decision.
-- **"Forget me" is a real delete**, behind a two-click confirm (the button
-  relabels and reverts on blur). Never `window.confirm`, which blocks the frame
-  loop the whole game runs on.
+- **There is no "forget me" in the app** (ADR 0025). A player cannot delete
+  themselves; deletion is a rare operator action (`just delete-player`), so a
+  data-removal request goes to whoever runs the stack rather than through a button.
 - The client validates only that a name is non-empty after trimming and within
   `MAX_NAME_LENGTH`. Every other rule is the server's and its verdict is rendered
   verbatim — a client that mirrors the server's rules starts refusing names the

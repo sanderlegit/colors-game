@@ -75,7 +75,6 @@ export type GameApi = {
   submit(req: SubmitRequest): Promise<Result<Submission>>;
   claimName(name: string): Promise<Result<{ readonly name: string }>>;
   leaderboard(): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>>;
-  forget(): Promise<Result<null>>;
 };
 
 export type ApiOptions = {
@@ -285,10 +284,6 @@ export function createApi(options: ApiOptions = {}): GameApi {
     },
     async leaderboard(): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>> {
       return decoded(await send("GET", "/leaderboard", undefined), decodeLeaderboard);
-    },
-    async forget(): Promise<Result<null>> {
-      const res = await send("DELETE", "/me", undefined);
-      return res.ok ? { ok: true, value: null } : res;
     },
   };
 }

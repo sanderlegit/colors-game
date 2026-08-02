@@ -248,7 +248,15 @@ export type Repo = {
     readonly at: number;
   }): Promise<void>;
 
-  /** Removes the player and every game they played. */
+  /**
+   * Removes the player and every game they played.
+   *
+   * No handler calls this: there is no self-serve delete (ADR 0025). It stays as
+   * the canonical single-player delete — the two-statement shape the operator
+   * script (`just delete-player`) mirrors in raw SQL, and the primitive tests and
+   * fixtures reach for to make a fresh row. Deletion of a real player happens out
+   * of band, not through the API.
+   */
   deletePlayer(playerId: number): Promise<void>;
 
   topPlayers(limit: number): Promise<readonly BoardRow[]>;

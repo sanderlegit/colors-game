@@ -95,14 +95,19 @@ that's what stops somebody sitting there reserving names.
 `ada` already exists and you are simply `ada` too — no suffix, no "try another".
 If two of you share a name on the board, the older account sits above.
 
+**You can change your name any time.** Hit "Change name" on the summary and type
+a new one — your scores and your place on the board come with you. It's the same
+you, under a new name.
+
 **Lose the cookie and you lose the name.** Clear your browser data, open a private
 window, or come back on your phone instead of your laptop, and you'll be a new
 player with a fresh start. There's no way to recover it — no code to write down,
 because there's nothing to prove it was you. That's the trade for never asking you
 for an email address.
 
-**"Forget me" really deletes.** Two clicks — the button asks you to confirm — and
-your name, your scores and your row on the board are gone. Not hidden: gone.
+**Want your scores gone for good?** There's no delete button in the game — the
+only thing stored about you is the name you chose and your scores, and if you
+want them removed, ask whoever runs the site and they'll take you off the board.
 
 ## Why some games can't be submitted
 

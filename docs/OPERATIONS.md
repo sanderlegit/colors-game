@@ -52,9 +52,10 @@ in D1 (ADR 0014), not here.
 ```
 
 `event` is one of `health_checked`, `dependencies_checked`, `identity_read`,
-`identity_forgotten`, `game_started`, `score_submitted`, `name_claimed`,
-`leaderboard_read`, `client_error_reported`, `not_routed`. They come from the
-route table in `server/app.ts`, so a new endpoint cannot ship without one.
+`game_started`, `score_submitted`, `name_claimed`, `leaderboard_read`,
+`client_error_reported`, `not_routed`. They come from the route table in
+`server/app.ts`, so a new endpoint cannot ship without one. (`identity_forgotten`
+is gone with the self-serve delete — ADR 0025.)
 
 `retention_swept` is the one event that is not a request: it is the daily sweep
 (§ 6), emitted from `server/sweep.ts` through the same port. It carries no
@@ -728,3 +729,32 @@ recognise it as "invoked by hand" rather than as a bug.
 Against the **deployed** Worker there is no equivalent: nothing triggers a
 production cron on demand. The confirmation it ran is the log line, or the
 Worker's Triggers tab.
+
+### 6.4 Deleting one player by hand
+
+The sweep only touches rows nobody wants (stale games, orphan identities). A
+*named* player with scores it will never remove — that is deliberate (§ 6.1). So
+when a specific name has to come off the board (a takedown, an abuse report, a
+deletion request), that is a manual action. **There is no self-serve delete in
+the app** (ADR 0025); this is the only path.
+
+```sh
+just delete-player           # the local database
+just delete-player remote    # production — asks you to re-type the id first
+```
+
+It lists every player, hands the list to `fzf` to search and pick, and then
+deletes the chosen player **and their games** — the same two-statement delete
+`Repo.deletePlayer` does. `fzf` is the one prerequisite (`brew install fzf`);
+`scripts/players-table.mjs` formats the rows.
+
+It is a thin wrapper over what you could run yourself, which is the fallback if
+`fzf` is not to hand — find the id, then:
+
+```sh
+npx wrangler d1 execute colors --remote --command \
+  "DELETE FROM games WHERE player_id = <id>; DELETE FROM players WHERE id = <id>"
+```
+
+Deletion is not recoverable except from a backup (§ 4). Confirm the id against the
+`name` and `best_score` the picker shows before you type it back.
