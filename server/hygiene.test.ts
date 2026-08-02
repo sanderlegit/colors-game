@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createClient, GUESSES, playGame, startGame } from "./app.fixture";
+import { asArray, asRecord, asString } from "../src/shared/decode";
+import { createClient, GUESSES, jsonRecord, playGame, startGame } from "./app.fixture";
+
+/** The id of the top row's game — how a caller reaches an attempt or seed board. */
+async function topGameId(client: ReturnType<typeof createClient>): Promise<string> {
+  const board = await jsonRecord(await client.send("GET", "/api/leaderboard"));
+  const first = asRecord((asArray(board.entries) ?? [])[0]);
+  const id = first === null ? null : asString(first.gameId, 64);
+  if (id === null) throw new Error("the board carried no game id");
+  return id;
+}
 
 /**
  * What must never leave the server, asserted across every endpoint at once
@@ -42,6 +52,7 @@ describe("response hygiene", () => {
   it("leaks nothing from any endpoint a player can reach", async () => {
     const client = createClient();
     const played = await playGame(client, { name: "Ada" });
+    const finished = await topGameId(client);
 
     const { gameId } = await startGame(client);
     const responses: readonly (readonly [string, Response])[] = [
@@ -49,6 +60,10 @@ describe("response hygiene", () => {
       ["me", await client.send("GET", "/api/me")],
       ["result", played],
       ["leaderboard", await client.send("GET", "/api/leaderboard")],
+      // The attempt view and the seed board are the ADR 0024 additions: both
+      // replay a stored game, and neither may echo the seed that generated it.
+      ["attempt", await client.send("GET", `/api/games/${finished}/attempt`)],
+      ["seed-board", await client.send("GET", `/api/leaderboard?forGame=${finished}`)],
       ["name", await client.send("POST", "/api/name", { body: { name: "Grace" } })],
       // Every refusal, too: an error body is a response body.
       [

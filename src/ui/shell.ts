@@ -22,7 +22,7 @@ import { isMenuVisible } from "@/domain/selectors";
 import type { GameState } from "@/domain/state";
 import type { IdentityHandlers, PlayerIdentity, SubmitState } from "@/ui/identity";
 import { createIdentity } from "@/ui/identity";
-import type { LeaderboardHandlers, LeaderboardView } from "@/ui/leaderboard";
+import type { AttemptView, LeaderboardHandlers, LeaderboardView } from "@/ui/leaderboard";
 import { createLeaderboard } from "@/ui/leaderboard";
 import type { GameViewDeps } from "@/ui/render";
 import { createGameView } from "@/ui/render";
@@ -41,6 +41,13 @@ export type Shell = {
   update(state: GameState): void;
   setBestScore(score: number): void;
   setLeaderboard(view: LeaderboardView): void;
+  setAttempt(gameId: string, view: AttemptView): void;
+  /**
+   * Switch tabs without moving focus, for a change the composition root made —
+   * a `?board=` deep link opening the board. It does not fire `onTabSelect`: the
+   * caller is already doing the fetch that a player-driven switch would trigger.
+   */
+  selectTab(tab: TabId): void;
   setIdentity(identity: PlayerIdentity): void;
   setSubmission(submission: SubmitState): void;
   destroy(): void;
@@ -118,6 +125,8 @@ export function createShell(root: HTMLElement, deps: ShellDeps): Shell {
     update,
     setBestScore: view.setBestScore,
     setLeaderboard: board.setView,
+    setAttempt: board.setAttempt,
+    selectTab: applyTab,
     setIdentity: identity.setIdentity,
     setSubmission: identity.setSubmission,
     destroy,

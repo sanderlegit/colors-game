@@ -191,6 +191,7 @@ export function memoryRepo(): MemoryRepo {
         totalScore: 0,
         guessesJson: null,
         flags: 0,
+        kind: input.kind,
         startedAt: input.startedAt,
         finishedAt: null,
       });
@@ -264,13 +265,49 @@ export function memoryRepo(): MemoryRepo {
     },
 
     async topPlayers(limit: number): Promise<readonly BoardRow[]> {
-      return ranked()
-        .slice(0, Math.max(0, limit))
-        .map((player) => ({
+      const max = Math.max(0, limit);
+      const rows: BoardRow[] = [];
+      for (const player of ranked()) {
+        if (rows.length >= max) break;
+        // `bestGameId` is non-null whenever `bestScore > 0` — the two move
+        // together in `recordFinishedGame` — but the filter makes that a fact of
+        // this query rather than a trusted invariant, matching `d1.ts`.
+        if (player.bestGameId === null) continue;
+        rows.push({
           playerId: player.id,
           name: player.name ?? "",
           bestScore: player.bestScore,
-        }));
+          gameId: player.bestGameId,
+        });
+      }
+      return rows;
+    },
+
+    async topPlayersBySeed(seed: number, limit: number): Promise<readonly BoardRow[]> {
+      // Best finished, unflagged game per named player on this seed, ties broken
+      // by game id ascending — the same order the D1 window uses.
+      const best = new Map<number, Game>();
+      for (const game of games.values()) {
+        if (game.seed !== seed || game.status !== "finished" || game.flags !== 0) continue;
+        if (game.playerId === null) continue;
+        const player = players.get(game.playerId);
+        if (player === undefined || player.nameKey === null) continue;
+        const current = best.get(game.playerId);
+        const better =
+          current === undefined ||
+          game.totalScore > current.totalScore ||
+          (game.totalScore === current.totalScore && compareText(game.id, current.id) < 0);
+        if (better) best.set(game.playerId, game);
+      }
+      return [...best.values()]
+        .map((game) => ({
+          playerId: game.playerId ?? 0,
+          name: players.get(game.playerId ?? 0)?.name ?? "",
+          bestScore: game.totalScore,
+          gameId: game.id,
+        }))
+        .sort((a, b) => b.bestScore - a.bestScore || compareText(a.name, b.name))
+        .slice(0, Math.max(0, limit));
     },
 
     async countPlayersAbove(key: RankKey): Promise<number> {

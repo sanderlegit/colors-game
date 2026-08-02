@@ -30,12 +30,13 @@ import { scoreGuess } from "@/domain/scoring";
 import { totalScore } from "@/domain/selectors";
 import type { Event, GameState } from "@/domain/state";
 import { createReducer, initialState, ROUNDS_PER_GAME } from "@/domain/state";
-import type { RankedGame, Submission } from "@/platform/api";
+import type { Attempt, RankedGame, Submission } from "@/platform/api";
 import { createApi } from "@/platform/api";
 import { createClock } from "@/platform/clock";
 import { installErrorReporter } from "@/platform/errors";
 import { createSeed } from "@/platform/seed";
 import { browserStore, createMemoryStore, createStorage } from "@/platform/storage";
+import type { LeaderboardFilter } from "@/ui/leaderboard";
 import { createPicker } from "@/ui/picker";
 import { createShell } from "@/ui/shell";
 
@@ -79,6 +80,10 @@ function main(): void {
   let playing: RankedGame | null = null;
   let submitted: Submission | null = null;
   let boardPending = false;
+  /** The seed the board is filtered to, or null for the global board. */
+  let boardFilter: LeaderboardFilter | null = null;
+  /** Fetched attempts, kept so re-opening a row does not re-hit the network. */
+  const attempts = new Map<string, Attempt>();
 
   function nextSeed(): number {
     playing = prepared;
@@ -95,7 +100,20 @@ function main(): void {
       formatHex,
       bestScore: stats.bestScore,
     },
-    leaderboard: { onRetry: () => void loadBoard() },
+    leaderboard: {
+      onRetry: () => void loadBoard(),
+      onExpand: (gameId) => void loadAttempt(gameId),
+      onShare: (gameId) => void shareSeed(gameId),
+      onFilter: (gameId, name) => {
+        boardFilter = { gameId, name };
+        void loadBoard();
+      },
+      onClearFilter: () => {
+        boardFilter = null;
+        void loadBoard();
+      },
+      onPlaySeed: (gameId) => void playSeed(gameId),
+    },
     identity: {
       onClaim: (name: string) => void claimName(name),
       onForget: () => void forget(),
@@ -202,13 +220,69 @@ function main(): void {
   async function loadBoard(): Promise<void> {
     if (boardPending) return;
     boardPending = true;
+    const filter = boardFilter;
     shell.setLeaderboard({ status: "loading" });
-    const res = await api.leaderboard();
+    const res = await api.leaderboard(filter?.gameId);
     boardPending = false;
+    // A filter change while this was in flight wins — render the board that
+    // matches what the player is now looking at, not the one they left.
+    if (filter !== boardFilter) return void loadBoard();
+    if (!res.ok) {
+      shell.setLeaderboard({ status: "error", message: res.error.message });
+      return;
+    }
     shell.setLeaderboard(
-      res.ok
+      filter === null
         ? { status: "ready", entries: res.value.entries }
-        : { status: "error", message: res.error.message },
+        : { status: "ready", entries: res.value.entries, filter },
+    );
+  }
+
+  /**
+   * Fetch a row's attempt and push it back. Cached by `gameId`: a stored game
+   * never changes, so re-opening a row — or opening it after a filter toggle
+   * cleared the component's own cache — costs nothing.
+   */
+  async function loadAttempt(gameId: string): Promise<void> {
+    const cached = attempts.get(gameId);
+    if (cached !== undefined) {
+      shell.setAttempt(gameId, { status: "ready", attempt: cached });
+      return;
+    }
+    const res = await api.attempt(gameId);
+    if (res.ok) {
+      attempts.set(gameId, res.value);
+      shell.setAttempt(gameId, { status: "ready", attempt: res.value });
+    } else {
+      shell.setAttempt(gameId, { status: "error", message: res.error.message });
+    }
+  }
+
+  /** Copy a link that opens this game's seed board. Silent if the clipboard is denied. */
+  async function shareSeed(gameId: string): Promise<void> {
+    const link = `${window.location.origin}/?board=${encodeURIComponent(gameId)}`;
+    try {
+      await navigator.clipboard?.writeText(link);
+    } catch {
+      // An insecure context or a denied permission. Nothing the player can act on.
+    }
+  }
+
+  /**
+   * Start a ranked challenge on a chosen seed. The server issues a fresh game on
+   * that seed (`challengeOf`); playing it is the ordinary flow from there, and
+   * its score ranks only on the seed's board. `RESTART` from a summary, `START`
+   * otherwise — the same choice the menu's own button makes.
+   */
+  async function playSeed(gameId: string): Promise<void> {
+    const res = await api.startRanked(state.settings.memorizeMs, gameId);
+    if (!res.ok || res.value.roundsTotal !== ROUNDS_PER_GAME) return;
+    prepared = res.value;
+    const seed = nextSeed();
+    dispatch(
+      state.phase === "summary"
+        ? { type: "RESTART", seed, at: state.now }
+        : { type: "START", seed, at: state.now },
     );
   }
 
@@ -237,6 +311,17 @@ function main(): void {
   shell.update(state);
   void loadIdentity();
   void prepareRanked(state.settings.memorizeMs);
+
+  // A shared `/?board=<gameId>` link opens straight onto that seed's board. The
+  // name is unknown from the link alone, so the filter carries only the id and
+  // the banner says "this seed" rather than naming a player.
+  const shared = new URLSearchParams(window.location.search).get("board");
+  if (shared !== null && shared !== "") {
+    boardFilter = { gameId: shared };
+    shell.selectTab("leaderboard");
+    void loadBoard();
+  }
+
   createClock((ms) => dispatch({ type: "TICK", at: ms })).start();
 }
 

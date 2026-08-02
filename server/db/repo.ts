@@ -35,6 +35,14 @@ import type { Difficulty } from "../../src/domain/round";
 
 export type GameStatus = "active" | "finished" | "expired";
 
+/**
+ * Whether the seed was minted for this game or chosen from an existing one
+ * (ADR 0024). Only `open` games may raise `players.best_score`; a `challenge`
+ * game ranks solely on its seed's board, because a chosen seed the player could
+ * pick for being easy must not reach the global board.
+ */
+export type GameKind = "open" | "challenge";
+
 export type Player = {
   readonly id: number;
   readonly name: string | null;
@@ -58,6 +66,7 @@ export type Game = {
   readonly totalScore: number;
   readonly guessesJson: string | null;
   readonly flags: number;
+  readonly kind: GameKind;
   readonly startedAt: number;
   readonly finishedAt: number | null;
 };
@@ -82,6 +91,8 @@ export type NewGame = {
   readonly seed: number;
   readonly difficulty: Difficulty;
   readonly memorizeMs: number;
+  /** `open` for a self-minted seed, `challenge` for one chosen from a share link. */
+  readonly kind: GameKind;
   readonly startedAt: number;
 };
 
@@ -107,6 +118,14 @@ export type BoardRow = {
   readonly playerId: number;
   readonly name: string;
   readonly bestScore: number;
+  /**
+   * The game the row's score belongs to. For the global board it is the player's
+   * `best_game_id`; for a per-seed board it is the game that reached that score
+   * on the seed. It is what the client fetches an attempt breakdown from, and
+   * what a share link and the "only this seed" filter reference — a stable,
+   * already-public handle that lets the raw `seed` stay server-side (ADR 0024).
+   */
+  readonly gameId: string;
 };
 
 /** The order both the board and the rank count are computed in. */
@@ -240,6 +259,16 @@ export type Repo = {
   deletePlayer(playerId: number): Promise<void>;
 
   topPlayers(limit: number): Promise<readonly BoardRow[]>;
+
+  /**
+   * The board for one seed (ADR 0024): each named player's best finished,
+   * unflagged game on `seed`, ordered `total_score DESC, name ASC` — the same
+   * order as the global board, so a rank shown here cannot disagree with the
+   * row it sits on. Both `open` and `challenge` games count, so the player who
+   * originated the seed competes on it too. `gameId` on each row is the specific
+   * game that reached the score, not `best_game_id`.
+   */
+  topPlayersBySeed(seed: number, limit: number): Promise<readonly BoardRow[]>;
 
   /**
    * How many ranked players sort above `key`. Rank is that plus one.

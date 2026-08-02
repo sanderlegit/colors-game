@@ -66,14 +66,15 @@ describe("GET /api/leaderboard", () => {
     expect(await board(host)).toHaveLength(1);
   });
 
-  it("carries no player id into the response", async () => {
-    // `topPlayers` returns one so the handler can set `isYou`. It is a stable
-    // identifier for somebody who has given us only a name, and the client has
-    // no use for it.
+  it("carries the game id but no player id into the response", async () => {
+    // `topPlayers` returns the player id so the handler can set `isYou`. It is a
+    // stable identifier for somebody who has given us only a name, and stays
+    // server-side. `gameId` does go out — a row expands into that game's attempt
+    // (ADR 0024) — but the raw seed never does (`server/hygiene.test.ts`).
     const host = createClient();
     await playGame(host, { name: "Ada" });
     for (const row of await board(host)) {
-      expect(Object.keys(row).sort()).toEqual(["isYou", "name", "rank", "score"]);
+      expect(Object.keys(row).sort()).toEqual(["gameId", "isYou", "name", "rank", "score"]);
     }
   });
 
@@ -91,5 +92,42 @@ describe("GET /api/leaderboard", () => {
     };
     await createClient({ repo: (): Repo => counting }).send("GET", "/api/leaderboard");
     expect(asked).toBe(BOARD_SIZE);
+  });
+
+  describe("?forGame — one seed's board (ADR 0024)", () => {
+    async function seedBoard(
+      client: Client,
+      forGame: string,
+    ): Promise<readonly Record<string, unknown>[]> {
+      const response = await client.send("GET", `/api/leaderboard?forGame=${forGame}`);
+      expect(response.status).toBe(200);
+      return entries(await jsonRecord(response));
+    }
+
+    it("shows everyone who shares the seed of the named game", async () => {
+      // Every fixture game is issued the same seed, so two players' ordinary
+      // games already share one — which is the challenge case.
+      const host = createClient();
+      await playGame(host, { name: "Ada" });
+      await contender(host, "b", "Grace");
+      const anchor = (await board(host))[0]?.gameId;
+      expect(typeof anchor).toBe("string");
+      const names = (await seedBoard(host, String(anchor))).map((row) => row.name).sort();
+      expect(names).toEqual(["Ada", "Grace"]);
+    });
+
+    it("is an empty board for a game that does not exist", async () => {
+      const host = createClient();
+      await playGame(host, { name: "Ada" });
+      await expect(seedBoard(host, "nope")).resolves.toEqual([]);
+    });
+
+    it("marks the caller's own row on a filtered board too", async () => {
+      const host = createClient();
+      await playGame(host, { name: "Ada" });
+      const anchor = String((await board(host))[0]?.gameId);
+      const mine = (await seedBoard(host, anchor)).filter((row) => row.isYou === true);
+      expect(mine.map((row) => row.name)).toEqual(["Ada"]);
+    });
   });
 });

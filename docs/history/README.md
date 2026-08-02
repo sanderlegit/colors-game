@@ -24,6 +24,7 @@ turned out to be wrong, say so in the newer entry.
 | [0010](0010-a-justfile-and-a-tailnet.md) | 2026-08-02 — a justfile, and the stack on a tailnet | `just` wraps the runbook (ADR 0019); a phone reaches the real stack over Tailscale Serve (ADR 0020). The `Secure` cookie is what rules out a LAN address. `wrangler pages dev` rewrites the `Origin` header's scheme, so the origin guard cannot be tested through it. |
 | [0011](0011-pages-to-workers.md) | 2026-08-02 — Pages to Workers | Platform migration only (ADR 0022). Workers Logs is **opt-in** and was off — every log line would have gone nowhere in production. `--var KEY:VALUE` fails silently with `=`. `not_found_handling` is inert while `main` is set. |
 | [0012](0012-the-retention-sweep.md) | 2026-08-02 — the retention sweep | The cron ADR 0022 moved the platform for (ADR 0023). **The probabilistic sweep it claimed to replace never existed** — an ADR described unwritten code as current and it was carried forward as fact twice. ADR 0011's name release is deliberately not built: `last_seen_at` moves only inside a `waitUntil` nobody has proven writes. |
+| [0013](0013-leaderboard-attempts-and-challenges.md) | 2026-08-02 — leaderboard attempts and challenges | Board rows expand into a replayed attempt; seeds become challenge boards (ADR 0024). The seed-hygiene test forced the server to echo *colours*, not the seed, and the filter to key on an opaque `gameId`. Anti-farming is a `games.kind` column, not a check. A `limit: 0` regression the memory double caught; a name-cell button changed an accessible name; the slide animates with one `offsetHeight` reflow and no `transitionend`. |
 
 ## Auditing the docs
 
@@ -262,6 +263,13 @@ Discovered the hard way. Each one cost real time; none is guessable from the cod
   be tested there. `src/ui/picker.ts` is therefore split: pure exported coordinate
   maths (fully tested, property-based) plus a thin DOM wrapper that takes
   `measure` and `getContext` injections. Keep that split.
+- **happy-dom fires no `transitionend` and runs no CSS transitions.** A component
+  that deferred DOM state to a `transitionend` handler would leave that state
+  unset in every unit test. The board's expandable rows animate open with a
+  CSS-only `grid-template-rows` transition and snap closed by toggling the
+  `hidden` attribute synchronously — no timer, no `transitionend`, so the open/
+  closed state is deterministic under happy-dom and real in the browser
+  (`src/ui/leaderboard.ts`, ADR 0024).
 - **Vitest is split into two projects** (`app` on happy-dom, `server` on node).
   A backend test that passes only because happy-dom supplied a `window` is a test
   that lies about the Worker. Node 26 provides `Request`, `Response` and

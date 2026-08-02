@@ -12,6 +12,9 @@ import { playFullGame } from "./support";
  * trip through start → submit → claim → board touches `insertGame`,
  * `findGame`, `finishGame`, `insertPlayer`, `findPlayerByTokenHash`,
  * `recordFinishedGame`, `claimName`, `topPlayers` and `countPlayersAbove`.
+ * Expanding the row and filtering to its seed adds the ADR 0024 statements:
+ * the attempt replay's `findGame`, and `topPlayersBySeed`'s window query — the
+ * one bit of SQL a memory double cannot vet.
  *
  * Everything else about the board and the tab bar is asserted with intercepted
  * responses in `leaderboard.spec.ts`; this one stubs nothing.
@@ -71,4 +74,21 @@ test("start → submit → claim → board, against a real D1", async ({ page })
   await page.reload();
   await page.getByRole("tab", { name: "Leaderboard" }).click();
   await expect(page.getByRole("rowheader", { name: `${NAME} (you)` })).toBeVisible();
+
+  // ADR 0024: the row expands into the attempt the Worker replayed from the
+  // stored `seed` and `guesses_json`. Five rounds and the same total prove the
+  // replay read a real row back and re-derived the colours.
+  await page
+    .locator(".leaderboard-row", { hasText: NAME })
+    .locator(".leaderboard-expander")
+    .click();
+  const detail = page.locator(".leaderboard-detail:not([hidden])");
+  await expect(detail.locator(".breakdown-round")).toHaveCount(5);
+  await expect(detail.locator(".attempt-total")).toContainText(String(total));
+
+  // Filtering to this seed runs `topPlayersBySeed`'s window query on real D1 —
+  // and our own game, the only one on this seed, is on the board it returns.
+  await detail.getByRole("button", { name: "Only this seed" }).click();
+  await expect(page.locator(".leaderboard-filter")).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: new RegExp(NAME) })).toBeVisible();
 });

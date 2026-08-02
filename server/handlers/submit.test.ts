@@ -291,6 +291,7 @@ describe("losing the race and other unhappy paths", () => {
       seed: FIXTURE_SEED,
       difficulty: "normal",
       memorizeMs: 5000,
+      kind: "open",
       startedAt: client.now(),
     });
     await client.repo.finishGame({

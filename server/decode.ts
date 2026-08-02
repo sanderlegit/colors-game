@@ -48,7 +48,23 @@ export const MAX_NAME_LENGTH = 24;
  */
 const MAX_CHROMA = 0.5;
 
-export type StartGameBody = { readonly memorizeMs: number; readonly difficulty: Difficulty };
+/**
+ * The submit token is 43 base64url characters; 64 bounds it with room to spare
+ * and matches `MAX_ID_LENGTH` in `src/platform/api.ts`. A `challengeOf` past this
+ * is not a game id.
+ */
+export const MAX_GAME_ID_LENGTH = 64;
+
+export type StartGameBody = {
+  readonly memorizeMs: number;
+  readonly difficulty: Difficulty;
+  /**
+   * The game whose seed to play, or absent for a fresh open game (ADR 0024). It
+   * names a game, never a seed — the seed and difficulty are read from that row
+   * server-side, so a caller still cannot choose the numbers it plays against.
+   */
+  readonly challengeOf?: string;
+};
 
 /**
  * The only tier v1 will issue.
@@ -137,7 +153,14 @@ export function decodeStartGame(body: Record<string, unknown>): StartGameBody | 
       ? DEFAULT_DIFFICULTY
       : asEnum(body.difficulty, ISSUABLE_DIFFICULTIES);
   if (difficulty === null) return null;
-  return { memorizeMs, difficulty };
+  // Absent is the ordinary open game. Present-but-unreadable is refused rather
+  // than downgraded to open: a stale or mangled challenge link should fail
+  // visibly, not silently drop the player onto a different, random seed.
+  if (body.challengeOf === undefined) return { memorizeMs, difficulty };
+  const challengeOf = asString(body.challengeOf, MAX_GAME_ID_LENGTH);
+  return challengeOf === null || challengeOf === ""
+    ? null
+    : { memorizeMs, difficulty, challengeOf };
 }
 
 /**
