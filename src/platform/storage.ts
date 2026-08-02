@@ -15,6 +15,7 @@
  */
 
 import { DEFAULT_SETTINGS, type Settings } from "@/domain/state";
+import { booleanField, numberField, parseRecord } from "@/shared/decode";
 
 const STATS_KEY = "colors:stats";
 const SETTINGS_KEY = "colors:settings";
@@ -108,26 +109,7 @@ function guarded(store: KeyValueStore): KeyValueStore {
 
 function readRecord(store: KeyValueStore, key: string): Record<string, unknown> | null {
   const raw = store.getItem(key);
-  if (raw === null) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-  return parsed as Record<string, unknown>;
-}
-
-function numberField(record: Record<string, unknown>, key: string, fallback: number): number {
-  const value = record[key];
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return fallback;
-  return value;
-}
-
-function booleanField(record: Record<string, unknown>, key: string, fallback: boolean): boolean {
-  const value = record[key];
-  return typeof value === "boolean" ? value : fallback;
+  return raw === null ? null : parseRecord(raw);
 }
 
 export function createStorage(
