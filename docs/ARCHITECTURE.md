@@ -58,10 +58,14 @@ src/
                       (keeps the picker visible through reveal, ADR 0009)
     picker.ts         hue x chroma plane (canvas) + lightness bar (ADR 0007);
                       reveal-only target reticle + guess-to-target gap (ADR 0009)
-    hud.ts            countdown, round counter, confirm button
+    status.ts         the top row: round counter + running total (ADR 0027)
+    action.ts         the bottom phase action bar (ADR 0027): countdown while
+                      memorizing, Confirm while picking, Next round on reveal —
+                      one reserved slot, in the thumb zone. Split out of hud.ts
     reveal.ts         the persistent side panel (ADR 0010): live guess while
-                      picking, then ΔE, score, your-vs-target coords. Replaced
-                      preview.ts, which is deleted
+                      picking, then ΔE, score, your-vs-target coords. Numbers
+                      stack above the guess/target chips, which sit flush over the
+                      picker on phones (ADR 0027). Replaced preview.ts, deleted
     menu.ts           idle + summary screen; owns the identity block's mount slot
     breakdown.ts      per-round chips + "Round N (ΔE …)"; shared by menu + attempt
     identity.ts       set-username + "Change name" rename form (ADR 0011, 0024, 0025)

@@ -67,13 +67,23 @@ Two regions, always both visible, never requiring a scroll:
         ▲ lightness bar directly beneath, same width (ADR 0007)
 ```
 
-- **≥ 640px wide:** preview sits to the right of the swatch, as specified.
-- **< 640px (portrait phones):** preview moves *below* the swatch and lightness bar,
-  full width, min-height 20vh. Both remain on screen simultaneously — this is a
-  layout constraint, not a suggestion. Verified in e2e at iPhone 14 viewport.
+- **≥ 640px wide:** preview sits to the right of the swatch, as specified, with the
+  round/total status spanning the top and the phase action bar spanning the bottom.
+- **< 640px (portrait phones):** the screen reads top→bottom as **status → readout →
+  swatch/picker → action bar** (ADR 0027). The round counter and running total pin
+  the top; the readout (preview) sits *above* the picker with its guess/target
+  colour chips flush against it, so the painted colour is compared to the swatch by
+  eye; the numbers (ΔE, score, the per-axis breakdown, the You/Target coordinates)
+  stack above those chips. Both the swatch and the readout remain on screen
+  simultaneously — a layout constraint, not a suggestion. Verified in e2e at iPhone
+  14 viewport.
+- **The phase action lives in one reserved slot at the bottom, in the thumb zone**
+  (ADR 0027): the memorize countdown, then Confirm, then Next round — exactly one at
+  a time. Its box is reserved at a fixed height so the picker above it never moves as
+  the control changes (the memorize↔picking swatch rect is asserted identical).
 - The swatch is a fixed aspect ratio (1:1) sized by `min(70vw, 50vh)` so it never
-  pushes the preview or the confirm button below the fold, including with the iOS
-  URL bar visible. Safe-area insets respected.
+  pushes the readout or the action bar below the fold, including with the iOS URL
+  bar visible. Safe-area insets respected.
 - **A Play / Leaderboard tab bar exists only between games** — the same two
   phases as the menu, `idle` and `summary` — and is `hidden` during `memorize`,
   `picking` and `reveal` (ADR 0013). A bar pinned at the edge of the screen next

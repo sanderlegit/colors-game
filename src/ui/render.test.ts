@@ -78,7 +78,14 @@ beforeEach(() => {
 describe("createGameView", () => {
   it("builds the regions styles.css documents", () => {
     const { root } = setup();
-    for (const region of [".game", ".game-hud", ".game-stage", ".game-side", ".game-menu"]) {
+    for (const region of [
+      ".game",
+      ".game-status",
+      ".game-stage",
+      ".game-side",
+      ".game-action",
+      ".game-menu",
+    ]) {
       expect(root.querySelector(region), region).not.toBeNull();
     }
   });
@@ -103,8 +110,11 @@ describe("createGameView", () => {
     // the button has to be enabled before a click means anything.
     view.update(stateWith({ phase: "picking", hasMoved: true }));
 
-    must(root.querySelector<HTMLButtonElement>(".hud-confirm")).click();
-    must(root.querySelector<HTMLButtonElement>(".reveal-next")).click();
+    must(root.querySelector<HTMLButtonElement>(".action-confirm")).click();
+    // Reveal is the only phase the Next button is live in; drive to it so the
+    // click means something.
+    view.update(stateWith({ phase: "reveal" }));
+    must(root.querySelector<HTMLButtonElement>(".action-next")).click();
 
     expect(dispatch).toHaveBeenCalledWith({ type: "CONFIRM" });
     expect(dispatch).toHaveBeenCalledWith({ type: "NEXT" });

@@ -14,9 +14,10 @@
 
 import type { Oklch } from "@/color/types";
 import type { Event, GameState } from "@/domain/state";
-import { createHud } from "@/ui/hud";
+import { createAction } from "@/ui/action";
 import { createMenu } from "@/ui/menu";
 import { createReveal } from "@/ui/reveal";
+import { createStatus } from "@/ui/status";
 import { createSwatch } from "@/ui/swatch";
 
 export type PickerHandlers = {
@@ -61,20 +62,18 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   const game = document.createElement("div");
   game.className = "game";
 
-  const hudRegion = region(game, "game-hud");
-  const stageRegion = region(game, "game-stage");
+  // Region order top→bottom (ADR 0027): status · readout · picker · action bar.
+  // The menu overlays everything (`display: contents`), so its DOM position is
+  // free.
+  const statusRegion = region(game, "game-status");
   const sideRegion = region(game, "game-side");
+  const stageRegion = region(game, "game-stage");
+  const actionRegion = region(game, "game-action");
   const menuRegion = region(game, "game-menu");
 
   root.append(game);
 
-  const hud = createHud(
-    hudRegion,
-    { onConfirm: () => deps.dispatch({ type: "CONFIRM" }) },
-    {
-      reducedMotion,
-    },
-  );
+  const status = createStatus(statusRegion);
   const swatch = createSwatch(stageRegion, { reducedMotion });
   const picker = deps.createPicker(swatch.pickerSlot, {
     onPick: (value) => deps.dispatch({ type: "PICK", value }),
@@ -86,8 +85,18 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
   // rather than passed as undefined.
   const reveal = createReveal(
     sideRegion,
-    { onNext: () => deps.dispatch({ type: "NEXT" }) },
     deps.formatHex === undefined ? {} : { formatHex: deps.formatHex },
+  );
+
+  // The phase action bar: countdown while memorizing, Confirm while picking, Next
+  // round on reveal — one reserved slot at the bottom, in the thumb zone (ADR 0027).
+  const action = createAction(
+    actionRegion,
+    {
+      onConfirm: () => deps.dispatch({ type: "CONFIRM" }),
+      onNext: () => deps.dispatch({ type: "NEXT" }),
+    },
+    { reducedMotion },
   );
 
   // SPEC §8: Enter confirms. The picker owns the arrow keys, but confirming from
@@ -112,7 +121,7 @@ export function createGameView(root: HTMLElement, deps: GameViewDeps): GameView 
     deps.bestScore === undefined ? {} : { bestScore: deps.bestScore },
   );
 
-  const parts = [hud, swatch, picker, reveal, menu];
+  const parts = [status, swatch, picker, reveal, action, menu];
 
   function update(state: GameState): void {
     now = state.now;

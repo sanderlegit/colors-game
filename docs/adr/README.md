@@ -35,6 +35,7 @@ the most valuable thing in here.
 | [0024](0024-duplicate-display-names.md) | Display names are not unique; the board is ordered by (score, name, id) | accepted |
 | [0025](0025-rename-in-app-delete-by-operator.md) | Rename in the app; deletion is an operator action, not self-serve | accepted — **revises 0011** |
 | [0026](0026-leaderboard-attempts-and-seed-challenges.md) | Board rows expand into a replayed attempt; chosen seeds are challenges, ranked on their own board only | accepted |
+| [0027](0027-mobile-phase-action-bar.md) | The phone screen is status · readout · picker · action bar | accepted |
 
 ## Already rejected — do not re-propose without new evidence
 

@@ -37,7 +37,7 @@ test("the tab bar exists only between games (ADR 0013)", async ({ page }) => {
   await expect(page.locator(".picker-plane")).toBeVisible();
   await expect(tabs).toBeHidden(); // picking — the one the ADR names
 
-  await page.locator(".hud-confirm").click();
+  await page.locator(".action-confirm").click();
   await expect(page.locator(".reveal-chip--target")).toBeVisible();
   await expect(tabs).toBeHidden(); // reveal
 });
@@ -265,7 +265,7 @@ test("a round still plays through to a score with every API request refused", as
 
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await pick(page);
-  await page.locator(".hud-confirm").click();
+  await page.locator(".action-confirm").click();
 
   await expect(page.locator(".reveal")).toBeVisible();
   const score = Number(await page.locator(".reveal-score").textContent());
@@ -274,7 +274,7 @@ test("a round still plays through to a score with every API request refused", as
 
   // And the game carries on rather than wedging on the failed submission.
   await page.getByRole("button", { name: "Next round" }).click();
-  await expect(page.locator(".hud-round")).toContainText("2");
+  await expect(page.locator(".status-round")).toContainText("2");
   await page.waitForTimeout(MEMORIZE_MS + DISSOLVE_MS + 250);
   await expect(page.locator(".picker-plane")).toBeVisible();
 });

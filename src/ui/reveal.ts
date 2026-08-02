@@ -4,10 +4,16 @@
  *
  * During `picking` it is the live guess readout — the "You" column and the guess
  * swatch update every frame, exactly what the preview used to do. On `CONFIRM`
- * the target swatch, the ΔE / score / total and the "Target" column become
- * visible in slots that were **already reserved**, so the reveal shifts nothing
- * (ADR 0010, superseding the floating card of ADR 0009). The picker keeps its red
- * target reticle in place (ADR 0009); this panel is the numbers beside it.
+ * the target swatch, the ΔE / score and the "Target" column become visible in
+ * slots that were **already reserved**, so the reveal shifts nothing (ADR 0010,
+ * superseding the floating card of ADR 0009). The picker keeps its red target
+ * reticle in place (ADR 0009); this panel is the numbers beside it.
+ *
+ * The panel reads numbers-first, colour-chips-last: on phones it sits directly
+ * above the picker, so the guess/target swatches land flush against it for an
+ * at-a-glance comparison, with the readout stacked above (ADR 0027). Advancing to
+ * the next round is the phase action and lives in the bottom bar
+ * (`src/ui/action.ts`), not here.
  *
  * Result elements are toggled with `visibility`, not `display`, precisely so the
  * layout is byte-identical before and after the reveal. Their *content* is still
@@ -23,7 +29,6 @@ import { oklchToLab } from "@/color/convert";
 import { ciede2000Components } from "@/color/deltaE";
 import { oklchToCss } from "@/color/format";
 import type { Oklch } from "@/color/types";
-import { isFinalRound } from "@/domain/selectors";
 import type { GameState, RoundResult } from "@/domain/state";
 import { setFillColor } from "@/ui/swatch";
 
@@ -33,10 +38,6 @@ const EMPTY = "—";
 const BREAKDOWN_AXES = ["lightness", "chroma", "hue"] as const;
 type BreakdownAxis = (typeof BREAKDOWN_AXES)[number];
 const AXIS_LABEL: Record<BreakdownAxis, string> = { lightness: "L", chroma: "C", hue: "h" };
-
-export type RevealHandlers = {
-  readonly onNext: () => void;
-};
 
 export type RevealOptions = {
   /**
@@ -148,11 +149,7 @@ function hasGuess(state: GameState): boolean {
   return state.phase === "picking" || state.phase === "reveal";
 }
 
-export function createReveal(
-  root: HTMLElement,
-  handlers: RevealHandlers,
-  options: RevealOptions = {},
-): Reveal {
+export function createReveal(root: HTMLElement, options: RevealOptions = {}): Reveal {
   const formatHex = options.formatHex;
 
   const section = document.createElement("section");
@@ -214,18 +211,12 @@ export function createReveal(
     "The breakdown shows which axis cost you most: lightness lives on the bar, not " +
     "the plane, so a reticle that looks spot-on can still lose the round on L alone.";
 
-  const next = document.createElement("button");
-  next.type = "button";
-  next.className = "reveal-next";
-  next.textContent = "Next round";
-
-  section.append(pair, stats, breakdown, compare, explain, next);
+  // Numbers first, colour chips last: on phones the panel sits directly above the
+  // picker, so the guess/target swatches land flush against it for an at-a-glance
+  // comparison, with the readout stacked above them (ADR 0027). Advancing is the
+  // phase action and lives in the bottom bar (`src/ui/action.ts`), not here.
+  section.append(stats, breakdown, compare, explain, pair);
   root.append(section);
-
-  function onClick(): void {
-    handlers.onNext();
-  }
-  next.addEventListener("click", onClick);
 
   let renderedKey: string | null = null;
 
@@ -240,9 +231,8 @@ export function createReveal(
     const targetCss = revealed ? oklchToCss(state.target) : "";
     const delta = result === undefined ? EMPTY : result.deltaE.toFixed(3);
     const score = result === undefined ? EMPTY : String(Math.round(result.score));
-    const nextLabel = isFinalRound(state) ? "See summary" : "Next round";
 
-    const key = `${state.phase}|${guessCss}|${targetCss}|${delta}|${score}|${nextLabel}`;
+    const key = `${state.phase}|${guessCss}|${targetCss}|${delta}|${score}`;
     if (key === renderedKey) return;
     renderedKey = key;
 
@@ -287,12 +277,9 @@ export function createReveal(
         breakdownCells[axis].axis.classList.remove("is-dominant");
       }
     }
-
-    next.textContent = nextLabel;
   }
 
   function destroy(): void {
-    next.removeEventListener("click", onClick);
     section.remove();
   }
 
