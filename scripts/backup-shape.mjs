@@ -30,6 +30,7 @@ export const REQUIRED_TABLES = [
   "round_stats",
   "game_stats",
   "client_errors",
+  "name_changes_audit",
 ];
 
 /**

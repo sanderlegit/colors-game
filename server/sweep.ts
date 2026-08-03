@@ -47,6 +47,7 @@ import {
   DAY_MS,
   dayNumber,
   GAME_TTL_MS,
+  NAME_CHANGE_AUDIT_MAX_AGE_MS,
   ORPHAN_PLAYER_MAX_AGE_MS,
 } from "./limits";
 import { sweepRecord } from "./log";
@@ -116,6 +117,18 @@ const PASSES: readonly Pass[] = [
     run: (repo, now) =>
       repo.deleteOrphanedPlayers({
         createdBefore: now - ORPHAN_PLAYER_MAX_AGE_MS,
+        limit: SWEEP_BATCH_LIMIT,
+      }),
+  },
+  {
+    // ADR 0031. The name-change audit is the one table here with a *subject*, so
+    // unlike the ADR 0014 counters it cannot be kept forever: this bounds it to a
+    // retention window. Deleting a row loses only forensic history, never a name
+    // or a score — the name still lives on the player and their games.
+    field: "name_changes_deleted",
+    run: (repo, now) =>
+      repo.purgeNameChanges({
+        before: now - NAME_CHANGE_AUDIT_MAX_AGE_MS,
         limit: SWEEP_BATCH_LIMIT,
       }),
   },

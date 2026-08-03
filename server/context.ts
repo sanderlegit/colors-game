@@ -48,11 +48,13 @@ export type AppDeps = {
    */
   readonly newId: (bytes: number) => string;
   /**
-   * The pepper the logged player key is derived under, per isolate. Same trade
-   * as `mintSalt`: the key groups one player's requests inside one isolate and
-   * is meaningless outside the log store. See `log.ts`.
+   * The pepper the logged player key is derived under (ADR 0030). Deploy-scoped
+   * from the `LOG_PEPPER` secret so the key groups a player's requests across
+   * isolates for the log's 3-day life, with a per-isolate random fallback when
+   * the secret is unset. Bound to `env` for the same reason `repo` is: the
+   * secret only exists there. Meaningless outside the log store either way.
    */
-  readonly logPepper: () => string;
+  readonly logPepper: (env: Env) => string;
   /**
    * Where the one wide request event goes. Production is `console.log`, which
    * *is* Workers Logs — Cloudflare indexes the fields of a JSON line, so there

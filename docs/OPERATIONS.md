@@ -42,6 +42,17 @@ limit — which is precisely the class of failure the wide event cannot report.
 Retention is **3 days**. If you would be sad to lose it in three days, it belongs
 in D1 (ADR 0014), not here.
 
+> **Reading the past 3 days needs a scoped token; the wrangler login does not
+> have it.** `npx wrangler tail` streams the log **live** — it cannot query what
+> already happened, and the OAuth token `wrangler login` mints
+> (`workers_tail:read`) does not authorise the Workers Observability query API
+> either (it answers `10000 Authentication error`). To read the retained 3 days —
+> the usual case during an incident that has already occurred — use the dashboard
+> Logs view, or a Cloudflare **API token** with **Account → Workers
+> Observability: Read**. It still only reaches 3 days; anything you must answer
+> later than that belongs in D1, not here (ADR 0014, and the name-change audit in
+> ADR 0031).
+
 ```json
 {"@timestamp":"2026-08-02T13:45:01.004Z","level":"info","severity_number":9,
  "message":"POST /api/games/:gameId/result 200","service":"colors-api",
@@ -669,6 +680,7 @@ triggers best-effort.
 | `mint_buckets_deleted` | `mint_buckets` rows for past days | previous day | **Privacy, not disk.** These are the only per-IP-derived rows in the system, and ADR 0015 justifies them partly on being short-lived |
 | `client_errors_deleted` | `client_errors` past retention | 30 days | The write-side purge bounds new rows only; once reports stop, old ones stay forever |
 | `orphan_players_deleted` | `players` with `games_played = 0` **and `name_key IS NULL`**, and their games | 7 days | ADR 0011. Such a player holds no name and no board position — so the `name_key` guard is what makes that true |
+| `name_changes_deleted` | `name_changes_audit` rows past retention | 90 days | ADR 0031. The one swept table with a *subject* (`player_id`), so unlike the ADR 0014 counters it cannot be kept forever. Deleting a row loses forensic history only — never a name or a score |
 
 Every pass is bounded by `SWEEP_BATCH_LIMIT` (500), takes the oldest rows first,
 and reports its count. A capped pass is continued by the next run.
@@ -698,7 +710,8 @@ one otherwise look identical.
  "message":"sweep removed 7 rows, 0 passes failed","service":"colors-api",
  "event":"retention_swept","duration_ms":9,"sweep.cron":"17 4 * * *",
  "sweep.rows":7,"sweep.games_expired":3,"sweep.mint_buckets_deleted":2,
- "sweep.client_errors_deleted":1,"sweep.orphan_players_deleted":1}
+ "sweep.client_errors_deleted":1,"sweep.orphan_players_deleted":1,
+ "sweep.name_changes_deleted":0}
 ```
 
 | Field | Read it as |

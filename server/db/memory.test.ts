@@ -165,6 +165,31 @@ describe("setName", () => {
   });
 });
 
+describe("the name-change audit (ADR 0031)", () => {
+  it("records a first claim and a rename by folded key, but not a no-op set", async () => {
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 });
+    await repo.setName({ playerId: id, name: "ADA", key: "ada", at: T0 + 1 }); // same key
+    await repo.setName({ playerId: id, name: "Grace", key: "grace", at: T0 + 2 });
+    expect(await repo.nameChangesFor(id)).toEqual([
+      { at: T0, oldNameKey: null, newNameKey: "ada" },
+      { at: T0 + 2, oldNameKey: "ada", newNameKey: "grace" },
+    ]);
+  });
+
+  it("keeps each player's changes separate and deletes them with the player", async () => {
+    const repo = memoryRepo();
+    const a = await withPlayer(repo, "h1");
+    const b = await withPlayer(repo, "h2");
+    await repo.setName({ playerId: a, name: "Ada", key: "ada", at: T0 });
+    await repo.setName({ playerId: b, name: "Bob", key: "bob", at: T0 });
+    await repo.deletePlayer(a);
+    expect(await repo.nameChangesFor(a)).toEqual([]);
+    expect(await repo.nameChangesFor(b)).toEqual([{ at: T0, oldNameKey: null, newNameKey: "bob" }]);
+  });
+});
+
 describe("games", () => {
   it("inserts an active game with no player attached", async () => {
     const repo = memoryRepo();

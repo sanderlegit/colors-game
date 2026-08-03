@@ -1,12 +1,13 @@
 {
   "counts": {
-    "d1_migrations": 6,
+    "d1_migrations": 7,
     "players": 3,
     "games": 2,
     "mint_buckets": 1,
     "round_stats": 2,
     "game_stats": 2,
-    "client_errors": 1
+    "client_errors": 1,
+    "name_changes_audit": 2
   },
   "leaderboard": {
     "rows": 2,

@@ -126,14 +126,15 @@ export function createApp(deps: AppDeps = productionDeps): App {
    * that one is the database key and this one must not be: a log store holding
    * `players.token_hash` would be holding a value that unlocks a row.
    */
-  async function keyFor(request: Request): Promise<string | null> {
+  async function keyFor(request: Request, env: Env): Promise<string | null> {
     const token = readCookie(request.headers.get("cookie"), IDENTITY_COOKIE);
     if (token === null) return null;
-    return playerKey(token, deps.logPepper(), deps.hashToken);
+    return playerKey(token, deps.logPepper(env), deps.hashToken);
   }
 
   async function log(
     request: Request,
+    env: Env,
     trace: TraceContext,
     pattern: string,
     event: string,
@@ -150,7 +151,7 @@ export function createApp(deps: AppDeps = productionDeps): App {
         event,
         status: response.status,
         durationMs: at - startedAt,
-        player: await keyFor(request),
+        player: await keyFor(request, env),
         request,
       });
       deps.emit(JSON.stringify(record));
@@ -224,7 +225,7 @@ export function createApp(deps: AppDeps = productionDeps): App {
     // Awaited rather than deferred with `waitUntil`: the record is one SHA-256
     // and a `JSON.stringify`, and a log line that races the response is a log
     // line that goes missing exactly when the request is the interesting one.
-    await log(request, trace, pattern, event, response, startedAt);
+    await log(request, env, trace, pattern, event, response, startedAt);
     return secured(response);
   };
 }
