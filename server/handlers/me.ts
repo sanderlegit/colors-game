@@ -25,25 +25,17 @@
 
 import type { Handler, RequestContext } from "../context";
 import { jsonResponse, noContent } from "../http/json";
-import { bestGameName, currentPlayer, rankOf } from "../identity";
+import { currentPlayer, rankForNameOrNull } from "../identity";
 
 /** On the board only with a name and a score, which is the partial index's rule. */
 async function rankFor(
   context: RequestContext,
-  player: {
-    readonly id: number;
-    readonly name: string | null;
-    readonly bestScore: number;
-    readonly bestGameId: string | null;
-  },
+  player: { readonly name: string | null; readonly nameKey: string | null },
 ): Promise<number | null> {
-  if (player.name === null || player.bestScore <= 0) return null;
-  return rankOf(
-    context,
-    player.bestScore,
-    await bestGameName(context, player.bestGameId),
-    player.id,
-  );
+  // Your rank is your NAME's rank on the default best-per-name board (ADR 0033):
+  // everyone sharing a name shares one board row.
+  if (player.name === null) return null;
+  return rankForNameOrNull(context, player.nameKey);
 }
 
 export const getMe: Handler = async (context: RequestContext): Promise<Response> => {

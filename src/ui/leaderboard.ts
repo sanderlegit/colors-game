@@ -29,7 +29,7 @@
 
 import { oklchToCss } from "@/color/format";
 import type { Oklch } from "@/color/types";
-import type { LeaderboardEntry } from "@/platform/api";
+import type { BoardMode, LeaderboardEntry } from "@/platform/api";
 import type { AttemptCard, AttemptCardView } from "@/ui/attempt";
 import { createAttemptCard } from "@/ui/attempt";
 import { setFillColor } from "@/ui/swatch";
@@ -65,6 +65,8 @@ export type LeaderboardHandlers = {
   readonly onClearFilter: () => void;
   /** Play a ranked challenge on the filtered seed. */
   readonly onPlaySeed: (gameId: string) => void;
+  /** The Best-per-name / All-games toggle changed (ADR 0033). */
+  readonly onViewChange: (mode: BoardMode) => void;
 };
 
 export type LeaderboardOptions = {
@@ -180,6 +182,31 @@ export function createLeaderboard(
   playSeed.textContent = "Play set";
   banner.append(seedColors, playSeed);
 
+  const viewToggle = document.createElement("fieldset");
+  viewToggle.className = "leaderboard-view";
+  const viewLegend = document.createElement("legend");
+  viewLegend.className = "leaderboard-view-legend";
+  viewLegend.textContent = "Show";
+  viewToggle.append(viewLegend);
+  const VIEW_OPTIONS: readonly (readonly [BoardMode, string])[] = [
+    ["best", "Best per name"],
+    ["all", "All games"],
+  ];
+  for (const [value, label] of VIEW_OPTIONS) {
+    const option = document.createElement("label");
+    option.className = "leaderboard-view-option";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "leaderboard-view";
+    input.value = value;
+    input.checked = value === "best";
+    input.addEventListener("change", () => {
+      if (input.checked) handlers.onViewChange(value);
+    });
+    option.append(input, document.createTextNode(label));
+    viewToggle.append(option);
+  }
+
   const table = document.createElement("table");
   table.className = "leaderboard-table";
   table.hidden = true;
@@ -198,7 +225,7 @@ export function createLeaderboard(
   body.className = "leaderboard-body";
   table.append(caption, head, body);
 
-  section.append(back, heading, status, retry, banner, table);
+  section.append(back, heading, status, viewToggle, retry, banner, table);
   root.append(section);
 
   const byId = new Map<string, RowRefs>();

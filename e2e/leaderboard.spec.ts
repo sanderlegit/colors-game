@@ -57,6 +57,18 @@ test("the tab bar never covers the menu's primary action", async ({ page }) => {
   );
 });
 
+test("the Best-per-name / All-games toggle refetches the board (ADR 0033)", async ({ page }) => {
+  const api = await installApi(page);
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Leaderboard" }).click();
+  await expect(page.getByRole("rowheader", { name: "Ada" })).toBeVisible();
+  expect(api.calls("leaderboard")).toBe(1);
+
+  await expect(page.getByRole("radio", { name: "Best per name" })).toBeChecked();
+  await page.getByRole("radio", { name: "All games" }).check();
+  await expect.poll(() => api.calls("leaderboard")).toBe(2);
+});
+
 test("opening the board with a pointer moves focus into it, and Escape comes back", async ({
   page,
 }) => {

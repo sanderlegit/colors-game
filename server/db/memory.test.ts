@@ -494,7 +494,7 @@ describe("deletePlayer", () => {
     await repo.deletePlayer(id);
     await expect(repo.findPlayerByTokenHash("h1")).resolves.toBeNull();
     await expect(repo.findGame("g-h1")).resolves.toBeNull();
-    await expect(repo.topPlayers(10)).resolves.toEqual([]);
+    await expect(repo.topPlayers(10, "best")).resolves.toEqual([]);
   });
 
   it("leaves other players' games alone", async () => {
@@ -512,15 +512,19 @@ describe("the board", () => {
     await ranked(repo, "h1", "Ada", 400);
     await ranked(repo, "h2", "Grace", 460);
     await ranked(repo, "h3", "Alan", 400);
-    expect((await repo.topPlayers(10)).map((row) => row.name)).toEqual(["Grace", "Ada", "Alan"]);
+    expect((await repo.topPlayers(10, "best")).map((row) => row.name)).toEqual([
+      "Grace",
+      "Ada",
+      "Alan",
+    ]);
   });
 
   it("honours the limit", async () => {
     const repo = memoryRepo();
     await ranked(repo, "h1", "Ada", 400);
     await ranked(repo, "h2", "Grace", 460);
-    expect(await repo.topPlayers(1)).toHaveLength(1);
-    expect(await repo.topPlayers(0)).toHaveLength(0);
+    expect(await repo.topPlayers(1, "best")).toHaveLength(1);
+    expect(await repo.topPlayers(0, "best")).toHaveLength(0);
   });
 
   it("excludes the unnamed and the scoreless, matching the partial index", async () => {
@@ -535,13 +539,13 @@ describe("the board", () => {
     });
     await ranked(repo, "h2", "Zero", 0);
     await ranked(repo, "h3", "Ada", 400);
-    expect((await repo.topPlayers(10)).map((row) => row.name)).toEqual(["Ada"]);
+    expect((await repo.topPlayers(10, "best")).map((row) => row.name)).toEqual(["Ada"]);
   });
 
   it("carries the player id and best game, so a caller can mark and open its own row", async () => {
     const repo = memoryRepo();
     const id = await ranked(repo, "h1", "Ada", 400);
-    expect(await repo.topPlayers(10)).toEqual([
+    expect(await repo.topPlayers(10, "best")).toEqual([
       { playerId: id, name: "Ada", bestScore: 400, gameId: "g-h1" },
     ]);
   });
@@ -562,9 +566,9 @@ describe("the board", () => {
       name: null,
       nameKey: null,
     });
-    expect(await repo.topPlayers(10)).toEqual([]);
+    expect(await repo.topPlayers(10, "best")).toEqual([]);
     await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 + 1 });
-    expect((await repo.topPlayers(10)).map((row) => row.name)).toEqual(["Ada"]);
+    expect((await repo.topPlayers(10, "best")).map((row) => row.name)).toEqual(["Ada"]);
   });
 
   it("naming again labels only the latest game, leaving older entries (ADR 0029)", async () => {
@@ -589,7 +593,7 @@ describe("the board", () => {
       });
     }
     await repo.setName({ playerId: id, name: "Grace", key: "grace", at: T0 + 2000 });
-    const board = await repo.topPlayers(10);
+    const board = await repo.topPlayers(10, "best");
     expect(board.map((row) => `${row.name}:${row.gameId}`)).toEqual(["Ada:old", "Grace:new"]);
   });
 
@@ -616,7 +620,7 @@ describe("the board", () => {
       });
     }
     await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 + 2000 });
-    const board = await repo.topPlayers(10);
+    const board = await repo.topPlayers(10, "best");
     expect(board.map((row) => `${row.name}:${row.gameId}`)).toEqual(["Ada:best"]);
   });
 
@@ -642,9 +646,37 @@ describe("the board", () => {
         nameKey: name.toLowerCase(),
       });
     }
-    const board = await repo.topPlayers(10);
+    const board = await repo.topPlayers(10, "best");
     expect(board.map((row) => row.name)).toEqual(["Bob", "Alice"]);
     expect(board.map((row) => row.gameId)).toEqual(["g-bob", "g-alice"]);
+  });
+
+  it("`all` view lists every game; `best` collapses a name to its best (ADR 0033)", async () => {
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    for (const [gameId, score] of [
+      ["a", 300],
+      ["b", 500],
+    ] as const) {
+      await repo.insertGame(newGame(gameId));
+      await repo.finishGame({
+        gameId,
+        playerId: id,
+        totalScore: score,
+        guessesJson: "[]",
+        flags: 0,
+        finishedAt: T0,
+        name: "Ada",
+        nameKey: "ada",
+      });
+    }
+    expect((await repo.topPlayers(10, "all")).map((r) => `${r.name}:${r.gameId}`)).toEqual([
+      "Ada:b",
+      "Ada:a",
+    ]);
+    expect((await repo.topPlayers(10, "best")).map((r) => `${r.name}:${r.gameId}`)).toEqual([
+      "Ada:b",
+    ]);
   });
 });
 
@@ -680,7 +712,7 @@ describe("the per-seed board (ADR 0026)", () => {
     await onSeed(repo, "h1", "Ada", 100, 300, { kind: "challenge" });
     await onSeed(repo, "h2", "Grace", 100, 460, { kind: "open" });
     await onSeed(repo, "h3", "Alan", 999, 500, { kind: "challenge" }); // a different seed
-    const board = await repo.topPlayersBySeed(100, 10);
+    const board = await repo.topPlayersBySeed(100, 10, "best");
     expect(board.map((row) => row.name)).toEqual(["Grace", "Ada"]);
   });
 
@@ -704,7 +736,7 @@ describe("the per-seed board (ADR 0026)", () => {
         nameKey: "ada",
       });
     }
-    expect(await repo.topPlayersBySeed(55, 10)).toEqual([
+    expect(await repo.topPlayersBySeed(55, 10, "best")).toEqual([
       { playerId: id, name: "Ada", bestScore: 480, gameId: "high" },
     ]);
   });
@@ -739,14 +771,11 @@ describe("the per-seed board (ADR 0026)", () => {
       nameKey: null,
     });
     await onSeed(repo, "h3", "Ada", 7, 300);
-    expect((await repo.topPlayersBySeed(7, 10)).map((row) => row.name)).toEqual(["Ada"]);
+    expect((await repo.topPlayersBySeed(7, 10, "best")).map((row) => row.name)).toEqual(["Ada"]);
   });
 });
 
 describe("countPlayersAbove", () => {
-  // A score that outsorts nobody, standing in for a hypothetical query row.
-  const LAST = Number.MAX_SAFE_INTEGER;
-
   it("agrees with the board's own order for every row", async () => {
     // Rank and board position are displayed next to each other. If they can
     // disagree, that is a bug report — so the invariant is asserted directly.
@@ -755,49 +784,47 @@ describe("countPlayersAbove", () => {
     await ranked(repo, "h2", "Grace", 460);
     await ranked(repo, "h3", "Alan", 400);
     await ranked(repo, "h4", "Bob", 120);
-    const board = await repo.topPlayers(10);
+    const board = await repo.topPlayers(10, "best");
     for (const [index, row] of board.entries()) {
       const above = await repo.countPlayersAbove({
         bestScore: row.bestScore,
         name: row.name,
-        id: row.playerId,
+        gameId: row.gameId,
       });
       expect(above).toBe(index);
     }
   });
 
-  it("breaks a same-name, same-score tie by id, agreeing with the board (ADR 0024)", async () => {
-    // Two players called `ada` on the same score. Without the `id` tiebreak
-    // they would tie: both would count the same number above them, and the
-    // counted rank would disagree with the two distinct board rows.
+  it("collapses two players sharing a name to one best-per-name row (ADR 0033)", async () => {
+    // `best` groups by name across players, so two `ada`s are one row — the
+    // better game. `all` view shows both. Rank tracks the `best` board.
     const repo = memoryRepo();
-    const first = await ranked(repo, "h1", "ada", 400);
-    const second = await ranked(repo, "h2", "ada", 400);
-    const board = await repo.topPlayers(10);
-    expect(board.map((row) => row.playerId)).toEqual([first, second]);
-    for (const [index, row] of board.entries()) {
-      const above = await repo.countPlayersAbove({
-        bestScore: row.bestScore,
-        name: row.name,
-        id: row.playerId,
-      });
-      expect(above).toBe(index);
-    }
+    await ranked(repo, "h1", "ada", 400);
+    await ranked(repo, "h2", "ada", 460);
+    expect((await repo.topPlayers(10, "best")).map((row) => `${row.name}:${row.gameId}`)).toEqual([
+      "ada:g-h2",
+    ]);
+    expect((await repo.topPlayers(10, "all")).map((row) => row.gameId)).toEqual(["g-h2", "g-h1"]);
+    await expect(
+      repo.countPlayersAbove({ bestScore: 460, name: "ada", gameId: "g-h2" }),
+    ).resolves.toBe(0);
   });
 
   it("counts everybody for a score below the board", async () => {
     const repo = memoryRepo();
     await ranked(repo, "h1", "Ada", 400);
     await ranked(repo, "h2", "Grace", 460);
-    await expect(repo.countPlayersAbove({ bestScore: 1, name: "zz", id: LAST })).resolves.toBe(2);
+    await expect(repo.countPlayersAbove({ bestScore: 1, name: "zz", gameId: "~~~" })).resolves.toBe(
+      2,
+    );
   });
 
   it("counts nobody for a score above the board", async () => {
     const repo = memoryRepo();
     await ranked(repo, "h1", "Ada", 400);
-    await expect(repo.countPlayersAbove({ bestScore: 500, name: "Ada", id: LAST })).resolves.toBe(
-      0,
-    );
+    await expect(
+      repo.countPlayersAbove({ bestScore: 500, name: "Ada", gameId: "~~~" }),
+    ).resolves.toBe(0);
   });
 
   it("ignores players who are not on the board", async () => {
@@ -810,7 +837,9 @@ describe("countPlayersAbove", () => {
       ranked: true,
       at: T0,
     });
-    await expect(repo.countPlayersAbove({ bestScore: 10, name: "Ada", id: LAST })).resolves.toBe(0);
+    await expect(
+      repo.countPlayersAbove({ bestScore: 10, name: "Ada", gameId: "~~~" }),
+    ).resolves.toBe(0);
   });
 });
 

@@ -1,6 +1,6 @@
 # 0032 — placeholder names, and setting a name claims your unclaimed games
 
-Status: accepted — **refines 0029**
+Status: accepted — **refines 0029**; the board is now name-grouped / toggleable per [0033](0033-leaderboard-best-per-name-or-all-games.md)
 
 ## Context
 

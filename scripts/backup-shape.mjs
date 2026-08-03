@@ -44,16 +44,16 @@ export const REQUIRED_TABLES = [
  * leaderboard as the numbers on it.
  */
 export const LEADERBOARD_QUERY = `SELECT name, best_score FROM (
-     SELECT g.player_id AS player_id, g.name AS name, g.total_score AS best_score,
+     SELECT g.name AS name, g.total_score AS best_score, g.id AS game_id,
             ROW_NUMBER() OVER (
-              PARTITION BY g.player_id, g.name_key ORDER BY g.total_score DESC, g.id ASC
+              PARTITION BY g.name_key ORDER BY g.total_score DESC, g.id ASC
             ) AS rn
        FROM games g
       WHERE g.status = 'finished' AND g.flags = 0 AND g.kind = 'open'
         AND g.name_key IS NOT NULL AND g.total_score > 0
    )
    WHERE rn = 1
-   ORDER BY best_score DESC, name ASC, player_id ASC`;
+   ORDER BY best_score DESC, name ASC, game_id ASC`;
 
 export function fail(message) {
   process.stderr.write(`${message}\n`);

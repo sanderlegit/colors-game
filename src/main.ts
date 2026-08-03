@@ -30,7 +30,7 @@ import { scoreGuess } from "@/domain/scoring";
 import { totalScore } from "@/domain/selectors";
 import type { Event, GameState } from "@/domain/state";
 import { createReducer, initialState, ROUNDS_PER_GAME } from "@/domain/state";
-import type { Attempt, RankedGame, Submission } from "@/platform/api";
+import type { Attempt, BoardMode, RankedGame, Submission } from "@/platform/api";
 import { createApi } from "@/platform/api";
 import { createClock } from "@/platform/clock";
 import { installErrorReporter } from "@/platform/errors";
@@ -81,6 +81,7 @@ function main(): void {
   let boardPending = false;
   /** The seed the board is filtered to, or null for the global board. */
   let boardFilter: LeaderboardFilter | null = null;
+  let boardMode: BoardMode = "best";
   /** Fetched attempts, kept so re-opening a row does not re-hit the network. */
   const attempts = new Map<string, Attempt>();
 
@@ -112,6 +113,10 @@ function main(): void {
         void loadBoard();
       },
       onPlaySeed: (gameId) => void playSeed(gameId),
+      onViewChange: (mode) => {
+        boardMode = mode;
+        void loadBoard();
+      },
     },
     identity: {
       onClaim: (name: string) => void claimName(name),
@@ -206,7 +211,7 @@ function main(): void {
     boardPending = true;
     const filter = boardFilter;
     shell.setLeaderboard({ status: "loading" });
-    const res = await api.leaderboard(filter?.gameId);
+    const res = await api.leaderboard(filter?.gameId, boardMode);
     boardPending = false;
     // A filter change while this was in flight wins — render the board that
     // matches what the player is now looking at, not the one they left.

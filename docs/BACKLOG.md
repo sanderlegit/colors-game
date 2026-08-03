@@ -194,6 +194,7 @@ exist, and `games.flags` has two defined bits. What is left:
   deletes every row for a day that is over, bounded at 500 a run. This was a
   privacy gap rather than a disk one — they are the only per-IP-derived rows in
   the system and ADR 0015 justifies them partly on being short-lived.
+- **The leaderboard has a Best-per-name / All-games toggle (ADR 0033).** Best-per-name groups by name across players (default); All-games lists every game; rank tracks the best-per-name board.
 - **The name-snapshot rollout is complete (ADR 0029, refined by 0032).** Staged
   expand → reader flip → contract. **Expand** ✅ (migration `0006`: `games.name` /
   `games.name_key`, stamped at submit, existing rows backfilled), **reader flip**

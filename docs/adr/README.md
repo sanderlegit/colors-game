@@ -40,7 +40,8 @@ the most valuable thing in here.
 | [0029](0029-names-are-snapshotted-per-game.md) | The display name is snapshotted onto each game; the board reads the game, not the identity | accepted — **revises 0024, 0025, 0026; extends 0016; refined by 0032** |
 | [0030](0030-deploy-scoped-log-pepper.md) | `player.key` is peppered per deploy (`LOG_PEPPER` secret), not per isolate, so a player's log lines group across isolates | accepted — **revises the per-isolate trade in 0015** |
 | [0031](0031-name-change-audit.md) | A durable `name_changes_audit` table (folded keys) records each rename; a subject-bearing table, deleted with the player and swept at 90 days | accepted — **extends 0014** |
-| [0032](0032-placeholder-names-and-claim-on-set.md) | Unnamed games get a deterministic placeholder handle; setting a name claims all your unclaimed games | accepted — **refines 0029** |
+| [0032](0032-placeholder-names-and-claim-on-set.md) | Unnamed games get a deterministic placeholder handle; setting a name claims all your unclaimed games | accepted — **refines 0029; board grouping revised by 0033** |
+| [0033](0033-leaderboard-best-per-name-or-all-games.md) | Leaderboard toggles Best-per-name (default, groups by name across players) / All-games; rank tracks the best-per-name board | accepted |
 
 ## Already rejected — do not re-propose without new evidence
 

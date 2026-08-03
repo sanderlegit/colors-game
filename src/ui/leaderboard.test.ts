@@ -22,6 +22,7 @@ function handlers(): LeaderboardHandlers {
     onFilter: vi.fn(),
     onClearFilter: vi.fn(),
     onPlaySeed: vi.fn(),
+    onViewChange: vi.fn(),
   };
 }
 
@@ -58,6 +59,17 @@ describe("createLeaderboard", () => {
     expect(text(root, ".leaderboard-status")).toContain("Loading");
     expect(must(root.querySelector<HTMLElement>(".leaderboard-table")).hidden).toBe(true);
     expect(must(root.querySelector<HTMLElement>(".leaderboard-retry")).hidden).toBe(true);
+  });
+
+  it("has a Best-per-name / All-games toggle that reports changes (ADR 0033)", () => {
+    const { root, handlers: h } = setup();
+    const radios = [...root.querySelectorAll<HTMLInputElement>('input[name="leaderboard-view"]')];
+    expect(radios.map((r) => r.value)).toEqual(["best", "all"]);
+    expect(radios[0]?.checked).toBe(true);
+    const all = must(radios[1]);
+    all.checked = true;
+    all.dispatchEvent(new Event("change"));
+    expect(h.onViewChange).toHaveBeenCalledWith("all");
   });
 
   it("renders the server's message and a retry when the request fails", () => {

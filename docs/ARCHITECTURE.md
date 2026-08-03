@@ -362,7 +362,7 @@ Endpoints (all under `/api`, all same-origin, all `Cache-Control: no-store`):
 | POST | `/games/:gameId/result` | 200 the scored submission |
 | GET | `/games/:gameId/attempt` | 200 `{totalScore, rounds[]}` — a finished game replayed with its colours, for the board's expandable row (ADR 0026). Public; no seed |
 | POST | `/name` | 200 `{name}`. Stamps the name on the just-played game and the identity prefill (ADR 0029) |
-| GET | `/leaderboard` | 200 `{entries[]}` — best game per `(player, name)`, labelled by the game's snapshotted `name` (ADR 0029), never `players.name`. `?forGame=<gameId>` returns that game's seed's board; each entry carries `gameId` |
+| GET | `/leaderboard` | 200 `{entries[]}` — `?view=best` (default) is one row per name across players (best game under it); `?view=all` is one row per game (ADR 0033). Names are the game's snapshot (ADR 0029), never `players.name`. `?forGame=<gameId>` returns that game's seed's board; each entry carries `gameId` |
 | POST | `/client-error` | 204. Browser exceptions, deduplicated by `hash(message + stack)` |
 
 `gameId` is 32 bytes of base64url and *is* the single-use submit token:

@@ -1,6 +1,6 @@
 # 0024 — Display names are not unique; the board is ordered by (score, name, id)
 
-Date: 2026-08-02 · Status: accepted — **board source & order moved off `players` by [0029](0029-names-are-snapshotted-per-game.md)**
+Date: 2026-08-02 · Status: accepted — **board source & order moved off `players` by [0029](0029-names-are-snapshotted-per-game.md)**; the board grouping and order are superseded by [0033](0033-leaderboard-best-per-name-or-all-games.md)
 
 > **The board's name and its order no longer live on `players`.** ADR 0029 moves
 > the board to `games`: an entry is the best game per `(player_id, name_key)`,
