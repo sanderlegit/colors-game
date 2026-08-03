@@ -57,13 +57,20 @@ describe("GET /api/leaderboard", () => {
     expect((await board(host, null)).map((row) => row.isYou)).toEqual([false]);
   });
 
-  it("leaves off players with no name and players with no score", async () => {
+  it("shows a finisher who has not named themselves under a placeholder (ADR 0032)", async () => {
+    // A player who finishes without naming still lands on the board, under a
+    // generated handle rather than their absence — and can claim it later.
     const host = createClient();
     await playGame(host, { name: "Ada" });
     const nameless = createClient({ repo: (): Repo => host.repo }, "b");
     nameless.setNow(host.now());
     await playGame(nameless);
-    expect(await board(host)).toHaveLength(1);
+    const rows = await board(host);
+    expect(rows).toHaveLength(2);
+    const names = rows.map((row) => row.name);
+    expect(names).toContain("Ada");
+    // The nameless player is there under a placeholder handle, not "Ada".
+    expect(names.filter((name) => name !== "Ada")).toHaveLength(1);
   });
 
   it("carries the game id but no player id into the response", async () => {

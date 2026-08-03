@@ -593,6 +593,33 @@ describe("the board", () => {
     expect(board.map((row) => `${row.name}:${row.gameId}`)).toEqual(["Ada:old", "Grace:new"]);
   });
 
+  it("naming claims every unclaimed game, so a nameless best score shows (ADR 0032)", async () => {
+    // The multi-nameless fix: a player's best game was played before they named,
+    // and was not the most recent. Claiming only the latest would leave it off
+    // the board; claiming every unclaimed game puts it back.
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    for (const [gameId, score, at] of [
+      ["best", 500, T0],
+      ["later", 200, T0 + 1000],
+    ] as const) {
+      await repo.insertGame(newGame(gameId));
+      await repo.finishGame({
+        gameId,
+        playerId: id,
+        totalScore: score,
+        guessesJson: "[]",
+        flags: 0,
+        finishedAt: at,
+        name: null,
+        nameKey: null,
+      });
+    }
+    await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 + 2000 });
+    const board = await repo.topPlayers(10);
+    expect(board.map((row) => `${row.name}:${row.gameId}`)).toEqual(["Ada:best"]);
+  });
+
   it("one identity that played under two names holds two entries (the shared device)", async () => {
     // Two people on one phone (one cookie, one player) submit under their own
     // names. Each name is a separate `(player, name)` entry, so both appear —
