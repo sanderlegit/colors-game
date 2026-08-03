@@ -211,6 +211,7 @@ type Shell = {
   setBestScore(score: number): void;
   setLeaderboard(view: LeaderboardView): void;   // pushed when a request settles
   setAttempt(gameId, view): void;                // an expanded row's replay (ADR 0026)
+  setFilterColors(gameId, colors): void;         // the seed's target colours for the filter banner
   selectTab(tab): void;                          // a ?board= deep link opening the board
   setIdentity(identity: PlayerIdentity): void;
   setSubmission(submission: SubmitState): void;

@@ -250,10 +250,14 @@ seed**.
 
 **A seed can be a challenge.** "Only this seed" filters the board to one game's
 colours (best score per player on that seed); the share link opens straight onto
-that filtered board. From there, **Play this seed** starts a game on the same
-colours. A game played this way is a *challenge*: it ranks on that seed's board
-but **never raises your global best score**, because its seed was chosen and a
-chosen seed you could pick for being easy must not reach the global board
+that filtered board. A filtered board shows a **Back** button (top-left) to
+return to the global board, and a banner that lists the seed's **target colours**
+beside **Play set**, which starts a game on the same colours. The colours come
+from a replayed attempt, not the seed itself (ADR 0026), and are already public —
+any row expands to the same breakdown — so the banner reveals nothing a click did
+not already. A game played this way is a *challenge*: it ranks on that seed's
+board but **never raises your global best score**, because its seed was chosen and
+a chosen seed you could pick for being easy must not reach the global board
 (ADR 0015, ADR 0026). The client never names a seed — it points at an existing
 game, and the server reads the seed off that row.
 

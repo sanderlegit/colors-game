@@ -220,6 +220,29 @@ function main(): void {
         ? { status: "ready", entries: res.value.entries }
         : { status: "ready", entries: res.value.entries, filter },
     );
+    if (filter !== null) void loadSeedColors(filter.gameId);
+  }
+
+  /**
+   * The filter banner shows the seed's target colours. They live only in a
+   * replayed attempt (ADR 0026 — the seed itself never leaves the server), so the
+   * anchor game's attempt is the source, and its cache is shared with the row
+   * panels. A failed fetch simply leaves the banner without swatches.
+   */
+  async function loadSeedColors(gameId: string): Promise<void> {
+    let attempt = attempts.get(gameId);
+    if (attempt === undefined) {
+      const res = await api.attempt(gameId);
+      if (!res.ok) return;
+      attempts.set(gameId, res.value);
+      attempt = res.value;
+    }
+    // A filter change while the fetch was in flight wins; drop a stale push.
+    if (boardFilter?.gameId !== gameId) return;
+    shell.setFilterColors(
+      gameId,
+      attempt.rounds.map((round) => round.target),
+    );
   }
 
   /**

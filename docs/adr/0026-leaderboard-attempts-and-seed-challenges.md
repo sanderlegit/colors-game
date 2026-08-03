@@ -79,18 +79,23 @@ so the player who originated the seed competes on it too (`topPlayersBySeed`, a
 the row server-side; the query and the response speak only `gameId`.
 
 The player-facing loop: expand a row → **Copy link** (`/?board=<gameId>`) or
-**Only this seed** (filter in place). A filtered board offers **Play this seed**
-(a `challengeOf` game) and **Show everyone** (clear). A shared `/?board=` link
-opens straight onto the seed board.
+**Only this seed** (filter in place). A filtered board shows a top-left **Back**
+button (clear the filter) and a banner listing the seed's target colours beside
+**Play set** (a `challengeOf` game). A shared `/?board=` link opens straight onto
+the seed board.
 
 ## Consequences
 
 - **The residual memory-read hole is wider for challenges, and contained.** A
   challenge player may have seen the target colours — the attempt panel shows
-  them. ADR 0015's exact-match and improbable-accuracy flags still apply, and
-  because a challenge cannot touch `best_score`, the blast radius is one seed's
-  board, not the global one. **How to detect a problem:** watch the flag rate on
-  `kind = 'challenge'` rows; a spike there is the signal this trade went wrong.
+  them, and the filter banner now lists them outright beside **Play set**, so a
+  challenger sees the set before playing. This surfaces an exposure that was
+  already one row-expand away rather than creating a new one: the colours were
+  always public on the seed board. ADR 0015's exact-match and improbable-accuracy
+  flags still apply, and because a challenge cannot touch `best_score`, the blast
+  radius is one seed's board, not the global one. **How to detect a problem:**
+  watch the flag rate on `kind = 'challenge'` rows; a spike there is the signal
+  this trade went wrong.
 - **`best_game_id` is now surfaced, not just stored.** It is the global board's
   `gameId`. It was always public in spirit — it is a spent submit token on a
   finished game, inert against the conditional-`UPDATE` submit guard — but a
@@ -100,7 +105,7 @@ opens straight onto the seed board.
   `best_game_id` column read). `e2e/backend.spec.ts` exercises both; a memory
   double cannot.
 - **The share link opens a read-only board, not a game.** Playing the challenge
-  is an explicit **Play this seed** button, so a link cannot start a game the
+  is an explicit **Play set** button, so a link cannot start a game the
   recipient did not ask for. The clipboard write is silent on denial (insecure
   context); no feedback is shown yet — `docs/BACKLOG.md` § Known gaps.
 - **Difficulty tiers remain unreachable from the UI**, so a challenge inherits

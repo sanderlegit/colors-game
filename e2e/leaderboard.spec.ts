@@ -351,10 +351,11 @@ test.describe("expanding a row into its attempt (ADR 0026)", () => {
 
     const banner = page.locator(".leaderboard-filter");
     await expect(banner).toBeVisible();
-    await expect(banner).toContainText("Ada");
+    // In place of a name, the banner lists the seed's target colours.
+    await expect(page.locator(".leaderboard-seed-color").first()).toBeVisible();
     expect(api.calls("leaderboard")).toBe(2);
 
-    await banner.getByRole("button", { name: "Show everyone" }).click();
+    await page.getByRole("button", { name: "Back to the full board" }).click();
     await expect(banner).toBeHidden();
     expect(api.calls("leaderboard")).toBe(3);
   });
@@ -366,6 +367,6 @@ test("a shared /?board= link opens straight onto the seed board", async ({ page 
 
   await expect(page.locator(".leaderboard")).toBeVisible();
   await expect(page.locator(".leaderboard-filter")).toBeVisible();
-  await expect(page.getByText("Showing this seed")).toBeVisible();
+  await expect(page.locator(".leaderboard-seed-color").first()).toBeVisible();
   expect(api.calls("leaderboard")).toBeGreaterThanOrEqual(1);
 });

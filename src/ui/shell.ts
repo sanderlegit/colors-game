@@ -18,6 +18,7 @@
  * loses a keyboard user their place mid-round.
  */
 
+import type { Oklch } from "@/color/types";
 import { isMenuVisible } from "@/domain/selectors";
 import type { GameState } from "@/domain/state";
 import type { IdentityHandlers, PlayerIdentity, SubmitState } from "@/ui/identity";
@@ -42,6 +43,7 @@ export type Shell = {
   setBestScore(score: number): void;
   setLeaderboard(view: LeaderboardView): void;
   setAttempt(gameId: string, view: AttemptView): void;
+  setFilterColors(gameId: string, colors: readonly Oklch[]): void;
   /**
    * Switch tabs without moving focus, for a change the composition root made —
    * a `?board=` deep link opening the board. It does not fire `onTabSelect`: the
@@ -126,6 +128,7 @@ export function createShell(root: HTMLElement, deps: ShellDeps): Shell {
     setBestScore: view.setBestScore,
     setLeaderboard: board.setView,
     setAttempt: board.setAttempt,
+    setFilterColors: board.setFilterColors,
     selectTab: applyTab,
     setIdentity: identity.setIdentity,
     setSubmission: identity.setSubmission,
