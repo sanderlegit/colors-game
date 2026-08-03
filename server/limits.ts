@@ -95,6 +95,16 @@ export const CLIENT_ERROR_RETENTION_DAYS = 30;
  */
 export const ORPHAN_PLAYER_MAX_AGE_MS = 7 * DAY_MS;
 
+/**
+ * How long a `name_changes_audit` row is kept (ADR 0031).
+ *
+ * The table is a subject-bearing forensic record, so it is bounded rather than
+ * kept forever: 90 days is long enough to investigate a report that arrives well
+ * after the fact — far longer than the 3-day log window it backstops — and short
+ * enough that a hobby-scale table never accumulates a year of renames.
+ */
+export const NAME_CHANGE_AUDIT_MAX_AGE_MS = 90 * DAY_MS;
+
 /** What the three counters in `mint_buckets` are counting. */
 export type MintKind = "game" | "identity" | "error";
 

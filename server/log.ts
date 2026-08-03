@@ -109,11 +109,11 @@ export const PLAYER_KEY_LENGTH = 12;
 /**
  * A stable, non-reversible handle for one identity.
  *
- * The pepper is per isolate and never leaves it, so the key groups requests
- * while debugging and means nothing outside the log store — the same trade
- * ADR 0015 records for the mint salt, and with the same consequence: grouping is
- * per isolate, not global. NUL-separated so no token can be padded into
- * another's key.
+ * The pepper is deploy-scoped (`LOG_PEPPER`, ADR 0030), so the key groups a
+ * player's requests across isolates for the log's 3-day life and still means
+ * nothing outside the log store — it is never the DB `token_hash`. Without the
+ * secret it falls back to a per-isolate random, grouping nothing globally.
+ * NUL-separated so no token can be padded into another's key.
  */
 export async function playerKey(
   token: string,

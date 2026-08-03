@@ -58,4 +58,14 @@ describe("the canonical host never reaches a development surface", () => {
     const code = CONFIG().replace(/#[^\n]*/g, "");
     expect(code).not.toContain("CANONICAL_HOST");
   });
+
+  /**
+   * `LOG_PEPPER` (ADR 0030) is a `wrangler secret` for the same reason: a value
+   * in the config file would apply to `wrangler dev` too, and a shared pepper
+   * across dev and prod is exactly the leak the secret exists to avoid.
+   */
+  it("never sets LOG_PEPPER in wrangler.toml", () => {
+    const code = CONFIG().replace(/#[^\n]*/g, "");
+    expect(code).not.toContain("LOG_PEPPER");
+  });
 });

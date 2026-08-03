@@ -38,6 +38,8 @@ the most valuable thing in here.
 | [0027](0027-mobile-phase-action-bar.md) | The phone screen is status · readout · picker · action bar | accepted |
 | [0028](0028-generosity-retune.md) | Score-curve generosity τ 16 → 18, with a one-time leaderboard reset | accepted — **refines 0004** |
 | [0029](0029-names-are-snapshotted-per-game.md) | The display name is snapshotted onto each game; the board reads the game, not the identity | accepted — **revises 0024, 0025, 0026; extends 0016** |
+| [0030](0030-deploy-scoped-log-pepper.md) | `player.key` is peppered per deploy (`LOG_PEPPER` secret), not per isolate, so a player's log lines group across isolates | accepted — **revises the per-isolate trade in 0015** |
+| [0031](0031-name-change-audit.md) | A durable `name_changes_audit` table (folded keys) records each rename; a subject-bearing table, deleted with the player and swept at 90 days | accepted — **extends 0014** |
 
 ## Already rejected — do not re-propose without new evidence
 

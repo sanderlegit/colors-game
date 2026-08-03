@@ -33,11 +33,13 @@ import type {
   Game,
   GameKind,
   GameStatus,
+  NameChange,
   NewGame,
   NewPlayer,
   Player,
   PurgeClientErrors,
   PurgeMintBuckets,
+  PurgeNameChanges,
   PurgeOrphanPlayers,
   RankKey,
   Repo,
@@ -290,6 +292,16 @@ export function d1Repo(db: D1Database): Repo {
       // games keep the name they were played under; only the most recent moves,
       // which is what stops a rename from rewriting the board.
       await db.batch([
+        // First, so it reads the *old* key before the UPDATE overwrites it. The
+        // `IS NOT` guard records a first claim (null → key) and a real rename, but
+        // not a no-op set of the same name (ADR 0031). Folded keys only.
+        db
+          .prepare(
+            `INSERT INTO name_changes_audit (player_id, at, old_name_key, new_name_key)
+               SELECT id, ?1, name_key, ?2 FROM players
+                WHERE id = ?3 AND name_key IS NOT ?2`,
+          )
+          .bind(input.at, input.key, input.playerId),
         db
           .prepare(
             `UPDATE players
@@ -318,8 +330,39 @@ export function d1Repo(db: D1Database): Repo {
       // report — so it does not depend on a PRAGMA being what we expect.
       await db.batch([
         db.prepare("DELETE FROM games WHERE player_id = ?1").bind(playerId),
+        // The name-change audit names this player (ADR 0031), so a forget deletes
+        // it too — explicitly, not on a cascade that only fires with FK enforced.
+        db.prepare("DELETE FROM name_changes_audit WHERE player_id = ?1").bind(playerId),
         db.prepare("DELETE FROM players WHERE id = ?1").bind(playerId),
       ]);
+    },
+
+    async nameChangesFor(playerId: number): Promise<readonly NameChange[]> {
+      const result = await db
+        .prepare(
+          `SELECT at, old_name_key, new_name_key FROM name_changes_audit
+            WHERE player_id = ?1 ORDER BY at, rowid`,
+        )
+        .bind(playerId)
+        .all();
+      return result.results.map((row) => ({
+        at: num(row, "at"),
+        oldNameKey: nullableText(row, "old_name_key"),
+        newNameKey: text(row, "new_name_key"),
+      }));
+    },
+
+    async purgeNameChanges(input: PurgeNameChanges): Promise<number> {
+      const result = await db
+        .prepare(
+          `DELETE FROM name_changes_audit
+            WHERE rowid IN (
+              SELECT rowid FROM name_changes_audit
+               WHERE at < ?1 ORDER BY at, rowid LIMIT ?2)`,
+        )
+        .bind(input.before, input.limit)
+        .run();
+      return result.meta.changes;
     },
 
     async topPlayers(limit: number): Promise<readonly BoardRow[]> {

@@ -70,24 +70,28 @@ export function randomHex(bytes: number): string {
 }
 
 /**
- * The pepper the logged player key is hashed under.
+ * The pepper the logged player key is hashed under (ADR 0030).
  *
- * Per isolate and never persisted, so nothing outside the log store can turn a
- * key back into an identity — and, like the mint salt in `makeDailySalt`, that
- * privacy property is bought with reach: two isolates give the same player two
- * different keys. It does not rotate on a clock, because a key that changed at
- * midnight would break exactly the debugging session it exists for.
+ * Prefers the deploy-scoped `LOG_PEPPER` secret, so a player's requests group
+ * under one key across isolates and across the log's 3-day retention — which is
+ * what makes `player.key` usable for an actual investigation. When the secret is
+ * absent (dev, tests), it falls back to a per-isolate random: still
+ * non-reversible, but grouping nothing beyond one isolate, exactly as before.
+ * Either way the pepper never rotates on a clock, so a key does not change
+ * mid-session, and it stays distinct from the DB `token_hash` pepper.
  *
- * **Minted on first use, not here.** `productionDeps` is built at module scope,
- * and the Workers runtime refuses to generate random values in global scope —
- * `crypto.getRandomValues` outside a handler is a startup error, not a warning.
+ * **The fallback is minted on first use, not here.** `productionDeps` is built
+ * at module scope, and the Workers runtime refuses to generate random values in
+ * global scope — `crypto.getRandomValues` outside a handler is a startup error.
  * `makeDailySalt` is lazy for the same reason.
  */
-export function makeLogPepper(): () => string {
-  let pepper: string | null = null;
-  return (): string => {
-    if (pepper === null) pepper = randomToken();
-    return pepper;
+export function makeLogPepper(): (env: Env) => string {
+  let fallback: string | null = null;
+  return (env: Env): string => {
+    const secret = env.LOG_PEPPER;
+    if (secret !== undefined && secret !== "") return secret;
+    if (fallback === null) fallback = randomToken();
+    return fallback;
   };
 }
 

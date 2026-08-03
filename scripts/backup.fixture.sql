@@ -6,8 +6,8 @@
 --
 -- Every value here is invented. The `token_hash` columns are counting patterns,
 -- not hashes of anything, and no row corresponds to a person. Games carry the
--- name they were played under (`games.name`, ADR 0029) — that is the column the
--- board and the drill's leaderboard checksum read. Regenerate with:
+-- name they were played under (`games.name`, ADR 0029); `name_changes_audit`
+-- carries folded name keys, never display names (ADR 0031). Regenerate with:
 --
 --   npx wrangler d1 migrations apply colors --local
 --   npx wrangler d1 execute colors --local --file <seed rows>
@@ -22,12 +22,13 @@ CREATE TABLE IF NOT EXISTS "d1_migrations"(
 		name       TEXT UNIQUE,
 		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-03 08:54:09');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-03 08:54:09');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(3,'0003_duplicate_names.sql','2026-08-03 08:54:09');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(4,'0004_challenge.sql','2026-08-03 08:54:09');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(5,'0005_reset_leaderboard.sql','2026-08-03 08:54:10');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(6,'0006_game_name_snapshot.sql','2026-08-03 08:54:10');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-03 14:24:43');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-03 14:24:43');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(3,'0003_duplicate_names.sql','2026-08-03 14:24:44');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(4,'0004_challenge.sql','2026-08-03 14:24:44');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(5,'0005_reset_leaderboard.sql','2026-08-03 14:24:44');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(6,'0006_game_name_snapshot.sql','2026-08-03 14:24:44');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(7,'0007_name_change_audit.sql','2026-08-03 14:24:44');
 CREATE TABLE players (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   
@@ -113,8 +114,16 @@ CREATE TABLE client_errors (
   PRIMARY KEY (fingerprint, day)
 ) WITHOUT ROWID;
 INSERT INTO "client_errors" ("fingerprint","day","message","stack","n","first_seen_at","last_seen_at") VALUES('deadbeef','2026-08-01','TypeError: nope','at update',2,1754000000000,1754000500000);
+CREATE TABLE name_changes_audit (
+  player_id    INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  at           INTEGER NOT NULL,
+  old_name_key TEXT,
+  new_name_key TEXT NOT NULL
+);
+INSERT INTO "name_changes_audit" ("player_id","at","old_name_key","new_name_key") VALUES(1,1754000000000,NULL,'ada');
+INSERT INTO "name_changes_audit" ("player_id","at","old_name_key","new_name_key") VALUES(2,1754000100000,NULL,'grace');
 DELETE FROM sqlite_sequence;
-INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',6);
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',7);
 INSERT INTO "sqlite_sequence" ("name","seq") VALUES('players',3);
 CREATE INDEX players_idle ON players(last_seen_at);
 CREATE INDEX games_player_started ON games(player_id, started_at DESC);
@@ -127,3 +136,5 @@ CREATE INDEX games_seed_board ON games(seed, total_score DESC)
   WHERE status = 'finished' AND flags = 0;
 CREATE INDEX games_name_board ON games(total_score DESC)
   WHERE status = 'finished' AND flags = 0 AND kind = 'open' AND name_key IS NOT NULL;
+CREATE INDEX name_changes_audit_player ON name_changes_audit(player_id);
+CREATE INDEX name_changes_audit_at ON name_changes_audit(at);

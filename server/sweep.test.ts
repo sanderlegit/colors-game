@@ -7,6 +7,7 @@ import {
   DAY_MS,
   dayNumber,
   GAME_TTL_MS,
+  NAME_CHANGE_AUDIT_MAX_AGE_MS,
   ORPHAN_PLAYER_MAX_AGE_MS,
 } from "./limits";
 import { SWEEP_EVENT } from "./log";
@@ -91,6 +92,7 @@ describe("nothing to sweep", () => {
       mint_buckets_deleted: 0,
       client_errors_deleted: 0,
       orphan_players_deleted: 0,
+      name_changes_deleted: 0,
     });
     expect(outcome.failed).toEqual([]);
     expect(outcome.capped).toEqual([]);
@@ -305,6 +307,27 @@ describe("orphaned players", () => {
   });
 });
 
+describe("the name-change audit sweep (ADR 0031)", () => {
+  it("deletes changes past the window and keeps recent ones", async () => {
+    const repo = memoryRepo();
+    const id = await addPlayer(repo, "hash:a", NOW - 400 * DAY_MS);
+    await repo.setName({
+      playerId: id,
+      name: "Ada",
+      key: "ada",
+      at: NOW - NAME_CHANGE_AUDIT_MAX_AGE_MS - 1,
+    });
+    await repo.setName({ playerId: id, name: "Grace", key: "grace", at: NOW - 1000 });
+
+    const outcome = await sweep(repo, NOW);
+
+    expect(outcome.counts.name_changes_deleted).toBe(1);
+    expect(await repo.nameChangesFor(id)).toEqual([
+      { at: NOW - 1000, oldNameKey: "ada", newNameKey: "grace" },
+    ]);
+  });
+});
+
 describe("the batch limit", () => {
   it("bounds a large batch and says it was capped", async () => {
     const repo = memoryRepo();
@@ -415,7 +438,7 @@ describe("a repo that cannot be built at all", () => {
     const logged = record(lines);
     expect(logged.level).toBe("error");
     expect(logged["sweep.failed"]).toBe(
-      "games_expired,mint_buckets_deleted,client_errors_deleted,orphan_players_deleted",
+      "games_expired,mint_buckets_deleted,client_errors_deleted,orphan_players_deleted,name_changes_deleted",
     );
     expect(logged["sweep.error"]).toBe("no D1 binding");
   });

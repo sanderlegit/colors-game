@@ -230,6 +230,22 @@ export type PurgeClientErrors = {
   readonly limit: number;
 };
 
+export type PurgeNameChanges = {
+  /** Rows older than this `at` (ms) are eligible, oldest first. */
+  readonly before: number;
+  readonly limit: number;
+};
+
+/**
+ * One row of the name-change audit (ADR 0031). Folded keys, never display names:
+ * `oldNameKey` is null on a first claim, `newNameKey` is always present.
+ */
+export type NameChange = {
+  readonly at: number;
+  readonly oldNameKey: string | null;
+  readonly newNameKey: string;
+};
+
 export type PurgeOrphanPlayers = {
   /** Only nameless rows with `games_played = 0` are eligible, and only past this. */
   readonly createdBefore: number;
@@ -281,6 +297,12 @@ export type Repo = {
     readonly key: string;
     readonly at: number;
   }): Promise<void>;
+
+  /**
+   * The player's name changes, oldest first (ADR 0031). Written by `setName`
+   * whenever the folded key actually changes; read for forensics and by tests.
+   */
+  nameChangesFor(playerId: number): Promise<readonly NameChange[]>;
 
   /**
    * Removes the player and every game they played.
@@ -359,6 +381,9 @@ export type Repo = {
 
   /** Delete `client_errors` older than the retention window. Returns rows deleted. */
   deleteClientErrorsBefore(input: PurgeClientErrors): Promise<number>;
+
+  /** Delete `name_changes_audit` rows older than the retention window (ADR 0031). */
+  purgeNameChanges(input: PurgeNameChanges): Promise<number>;
 
   /**
    * Delete players who never finished a game, and their games with them.

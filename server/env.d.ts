@@ -28,4 +28,13 @@ interface Env {
    * e2e proxy on `127.0.0.1:5174` and a `ts.net` phone address all working.
    */
   readonly CANONICAL_HOST?: string;
+
+  /**
+   * The pepper the logged `player.key` is hashed under (ADR 0030). A `wrangler
+   * secret`, not in `wrangler.toml`, for the same reason as `CANONICAL_HOST`.
+   * Deploy-scoped rather than per-isolate, so a player's requests group across
+   * isolates for the log's 3-day life; absent, the key falls back to a
+   * per-isolate random (dev and tests), which groups nothing globally.
+   */
+  readonly LOG_PEPPER?: string;
 }

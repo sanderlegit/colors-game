@@ -426,6 +426,13 @@ subject-access or delete. `round_stats.hue_bucket` is the instrument ADR 0008
 asked for and never had — twelve 30° buckets, so the hue-opponent axes are pairs
 six apart.
 
+The one **subject-bearing** analytics table is the exception, and a deliberate
+one: `name_changes_audit` (migration `0007`, ADR 0031) records each rename by
+folded key, written from `setName`. Because it names a `player_id` it is deleted
+with the player and bounded by a 90-day sweep pass — the obligations the
+subjectless counters above are designed to avoid. It exists because the rename
+bug it would have caught was invisible in a 3-day, subjectless log.
+
 `Replay.targetHues` exists solely to feed it, and is kept out of `RoundReport`
 precisely because `rounds` is echoed to the client and this is not.
 
