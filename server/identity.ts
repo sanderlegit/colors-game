@@ -82,6 +82,11 @@ export async function mintPlayer(context: RequestContext, at: number): Promise<M
  * `id` is passed as the final tiebreak: names are not unique (ADR 0024), so two
  * equal-scoring players with the same name are ordered by id, and the rank this
  * returns then matches the board row's position.
+ *
+ * `name` is the name the player's *best game* was played under (`bestGameName`),
+ * not the mutable `players.name` — since the board reads the game's snapshot
+ * (ADR 0029), ranking against the identity's current name could disagree with
+ * the row it sits on the moment the two differ (after a rename).
  */
 export async function rankOf(
   context: RequestContext,
@@ -91,4 +96,18 @@ export async function rankOf(
 ): Promise<number> {
   const above = await context.repo.countPlayersAbove({ bestScore, name: name ?? "", id });
   return above + 1;
+}
+
+/**
+ * The name a player's best game was played under — the label its board entry
+ * carries (ADR 0029) — or null if that game had no name. This is the name
+ * `rankOf` must rank against so a counted rank matches the board row exactly.
+ */
+export async function bestGameName(
+  context: RequestContext,
+  bestGameId: string | null,
+): Promise<string | null> {
+  if (bestGameId === null) return null;
+  const game = await context.repo.findGame(bestGameId);
+  return game?.name ?? null;
 }

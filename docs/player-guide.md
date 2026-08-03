@@ -96,8 +96,11 @@ that's what stops somebody sitting there reserving names.
 If two of you share a name on the board, the older account sits above.
 
 **You can change your name any time.** Hit "Change name" on the summary and type
-a new one — your scores and your place on the board come with you. It's the same
-you, under a new name.
+a new one. The new name goes on the game you just played and on the games you
+play next — it does not rewrite your older games, which stay on the board under
+the name you played them with. So if you've played under two names, you'll see
+both on the board. It's the same you either way; only the label on each game
+changes.
 
 **Lose the cookie and you lose the name.** Clear your browser data, open a private
 window, or come back on your phone instead of your laptop, and you'll be a new

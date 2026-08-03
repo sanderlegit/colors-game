@@ -1,6 +1,13 @@
 # 0024 — Display names are not unique; the board is ordered by (score, name, id)
 
-Date: 2026-08-02 · Status: accepted
+Date: 2026-08-02 · Status: accepted — **board source & order moved off `players` by [0029](0029-names-are-snapshotted-per-game.md)**
+
+> **The board's name and its order no longer live on `players`.** ADR 0029 moves
+> the board to `games`: an entry is the best game per `(player_id, name_key)`,
+> labelled by the game's snapshotted `name`, and the total order re-derives as
+> `(total_score DESC, name ASC, player_id ASC)` over those entries. The
+> duplicate-names decision and the final-tiebreak argument below still stand —
+> only the table they read from moved.
 
 ## Context
 

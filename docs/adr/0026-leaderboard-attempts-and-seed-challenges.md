@@ -1,6 +1,12 @@
 # 0026 — Leaderboard rows expand into a replayed attempt; seeds become challenges
 
-Date: 2026-08-02 · Status: accepted
+Date: 2026-08-02 · Status: accepted — **board & attempt names now come from the game snapshot ([0029](0029-names-are-snapshotted-per-game.md))**
+
+> **A row's name is now the game's own snapshot, not `players.name`.** ADR 0029
+> draws both the global board and the per-seed board (`topPlayersBySeed`) from
+> `games`, labelling each entry with `g.name` — so a rename relabels neither a
+> global row nor a seed row. The expandable-attempt and challenge decisions here
+> are otherwise unchanged.
 
 ## Context
 

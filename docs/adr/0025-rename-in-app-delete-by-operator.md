@@ -1,6 +1,13 @@
 # 0025 — Rename in the app; deletion is an operator action
 
-Date: 2026-08-02 · Status: accepted
+Date: 2026-08-02 · Status: accepted — **the "rename keeps your board row" consequence is reversed by [0029](0029-names-are-snapshotted-per-game.md)**
+
+> **A rename no longer keeps your board row under the new name.** This ADR's
+> "a rename keeps the identity, the cookie, the scores and the board row — only
+> the displayed name changes" is reversed by ADR 0029: the board reads each
+> game's snapshotted name, so a rename relabels nothing already posted and takes
+> effect only on games played afterwards. The split of intents — rename in the
+> app, deletion by an operator, and the removal of `DELETE /api/me` — still stands.
 
 ## Context
 

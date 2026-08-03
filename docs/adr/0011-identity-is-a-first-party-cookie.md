@@ -5,7 +5,9 @@ Date: 2026-08-02 · Status: accepted
 > **Two consequences below are superseded.** Names **no longer auto-suffix** on
 > collision — they are not unique at all (ADR 0024). And **"Forget me" is gone**:
 > there is no self-serve delete; a player renames in place and deletion is an
-> operator action (ADR 0025). The cookie-identity decision itself stands.
+> operator action (ADR 0025). And the board's name **no longer lives on this
+> identity row** — ADR 0029 snapshots it onto each game and reads it there, so a
+> rename relabels nothing already posted. The cookie-identity decision itself stands.
 
 ## Context
 

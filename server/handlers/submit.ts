@@ -40,7 +40,7 @@ import type { Handler, RequestContext } from "../context";
 import type { Game, Player } from "../db/repo";
 import { decodeSubmit, nameKey, readJsonBody, type SubmitBody } from "../decode";
 import { jsonResponse, problem } from "../http/json";
-import { currentPlayer, mintPlayer, rankOf } from "../identity";
+import { bestGameName, currentPlayer, mintPlayer, rankOf } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
 import { setPlayerName } from "../names";
 import { replayGame } from "../replay";
@@ -78,7 +78,12 @@ async function replayStored(
   }
 
   const scored = replayGame(game.seed, game.difficulty, storedGuesses(game));
-  const rank = await rankOf(context, player.bestScore, player.name, player.id);
+  const rank = await rankOf(
+    context,
+    player.bestScore,
+    await bestGameName(context, player.bestGameId),
+    player.id,
+  );
 
   return jsonResponse(
     200,
@@ -195,13 +200,20 @@ export const submitResult: Handler = async (
       ? null
       : await setPlayerName(context.repo, player.id, submitted.name, now);
   const name = landed ?? player.name;
+  // Rank against the name the player's best game was played under (ADR 0029): if
+  // this submission is that game, it is the name just stamped on it; otherwise
+  // it is whatever the prior best game carried. Not `players.name`, which the
+  // board no longer reads.
+  const rankName = aggregate.isPersonalBest
+    ? gameName
+    : await bestGameName(context, player.bestGameId);
 
   return jsonResponse(
     200,
     {
       totalScore: scored.totalScore,
       rounds: scored.rounds,
-      rank: await rankOf(context, aggregate.bestScore, name, player.id),
+      rank: await rankOf(context, aggregate.bestScore, rankName, player.id),
       isPersonalBest: aggregate.isPersonalBest,
       name,
       claimed: landed !== null,

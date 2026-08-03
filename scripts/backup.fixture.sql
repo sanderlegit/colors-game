@@ -5,13 +5,16 @@
 -- `.github/workflows/backup.yml` is not the thing that discovers it rotted.
 --
 -- Every value here is invented. The `token_hash` columns are counting patterns,
--- not hashes of anything, and no row corresponds to a person. Regenerate with:
+-- not hashes of anything, and no row corresponds to a person. Games carry the
+-- name they were played under (`games.name`, ADR 0029) — that is the column the
+-- board and the drill's leaderboard checksum read. Regenerate with:
 --
 --   npx wrangler d1 migrations apply colors --local
---   npx wrangler d1 execute colors --local --command "<seed rows>"
+--   npx wrangler d1 execute colors --local --file <seed rows>
 --   npx wrangler d1 export colors --local --output scripts/backup.fixture.sql
 --   node scripts/restore-drill.mjs --dump scripts/backup.fixture.sql \
 --     > scripts/backup.fixture.manifest.json
+--   # then re-add this header, which the export strips.
 
 PRAGMA defer_foreign_keys=TRUE;
 CREATE TABLE IF NOT EXISTS "d1_migrations"(
@@ -19,8 +22,12 @@ CREATE TABLE IF NOT EXISTS "d1_migrations"(
 		name       TEXT UNIQUE,
 		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-01 23:40:33');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-01 23:40:33');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-03 08:54:09');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-03 08:54:09');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(3,'0003_duplicate_names.sql','2026-08-03 08:54:09');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(4,'0004_challenge.sql','2026-08-03 08:54:09');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(5,'0005_reset_leaderboard.sql','2026-08-03 08:54:10');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(6,'0006_game_name_snapshot.sql','2026-08-03 08:54:10');
 CREATE TABLE players (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   
@@ -63,9 +70,9 @@ CREATE TABLE games (
   flags INTEGER NOT NULL DEFAULT 0,
   started_at INTEGER NOT NULL,
   finished_at INTEGER
-);
-INSERT INTO "games" ("id","player_id","status","seed","difficulty","memorize_ms","total_score","guesses_json","flags","started_at","finished_at") VALUES('g1',1,'finished',41762,'normal',5000,412,'[]',0,1753990000000,1753990043000);
-INSERT INTO "games" ("id","player_id","status","seed","difficulty","memorize_ms","total_score","guesses_json","flags","started_at","finished_at") VALUES('g2',2,'finished',22114,'normal',8000,388,'[]',0,1753990100000,1753990160000);
+, kind TEXT NOT NULL DEFAULT 'open', name TEXT, name_key TEXT);
+INSERT INTO "games" ("id","player_id","status","seed","difficulty","memorize_ms","total_score","guesses_json","flags","started_at","finished_at","kind","name","name_key") VALUES('g1',1,'finished',41762,'normal',5000,412,'[]',0,1753990000000,1753990043000,'open','Ada','ada');
+INSERT INTO "games" ("id","player_id","status","seed","difficulty","memorize_ms","total_score","guesses_json","flags","started_at","finished_at","kind","name","name_key") VALUES('g2',2,'finished',22114,'normal',8000,388,'[]',0,1753990100000,1753990160000,'open','Grace','grace');
 CREATE TABLE mint_buckets (
   bucket TEXT NOT NULL,
   day INTEGER NOT NULL,
@@ -107,13 +114,16 @@ CREATE TABLE client_errors (
 ) WITHOUT ROWID;
 INSERT INTO "client_errors" ("fingerprint","day","message","stack","n","first_seen_at","last_seen_at") VALUES('deadbeef','2026-08-01','TypeError: nope','at update',2,1754000000000,1754000500000);
 DELETE FROM sqlite_sequence;
-INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',2);
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',6);
 INSERT INTO "sqlite_sequence" ("name","seq") VALUES('players',3);
-CREATE UNIQUE INDEX players_name_key ON players(name_key) WHERE name_key IS NOT NULL;
-CREATE INDEX players_board ON players(best_score DESC, name)
-  WHERE name_key IS NOT NULL AND best_score > 0;
 CREATE INDEX players_idle ON players(last_seen_at);
 CREATE INDEX games_player_started ON games(player_id, started_at DESC);
 CREATE INDEX games_daily ON games(finished_at DESC) WHERE status = 'finished' AND flags = 0;
 CREATE INDEX games_sweep ON games(started_at) WHERE status = 'active';
 CREATE INDEX client_errors_day ON client_errors(day);
+CREATE INDEX players_board ON players(best_score DESC, name, id)
+  WHERE name_key IS NOT NULL AND best_score > 0;
+CREATE INDEX games_seed_board ON games(seed, total_score DESC)
+  WHERE status = 'finished' AND flags = 0;
+CREATE INDEX games_name_board ON games(total_score DESC)
+  WHERE status = 'finished' AND flags = 0 AND kind = 'open' AND name_key IS NOT NULL;

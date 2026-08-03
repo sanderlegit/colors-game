@@ -220,9 +220,12 @@ first-party cookie the server sets (ADR 0011):
 - **Names are not unique** (ADR 0024). The name you set is the name you get; two
   players sharing a name is an ordinary outcome, and the board keeps them apart
   and stably ordered by account age.
-- **You can change your name whenever** (ADR 0025). "Change name" reopens the
-  form pre-filled; setting a new name overwrites the old one and keeps your
-  scores and board position — a rename is not a new identity.
+- **You can change your name whenever** (ADR 0025), and a name is chosen per game
+  (ADR 0029). "Change name" reopens the form pre-filled with your current name;
+  the name you set lands on the game you just played and on the games you play
+  next. It does *not* rewrite your older games — each keeps the name it was played
+  under — so a shared device that has played under two names shows one entry per
+  name, not one merged row.
 - **Lose the cookie, lose the name.** Cleared storage, a private window or a
   second device is a fresh identity. There is no recovery code, by decision.
 - **There is no "forget me" in the app** (ADR 0025). A player cannot delete
@@ -235,8 +238,10 @@ first-party cookie the server sets (ADR 0011):
 
 ### 7.2 The board
 
-Best game score per player, one row each, with your own row marked by
-`aria-current`, a visually-hidden "(you)" and a tint — three channels, never
+Best game per player *and name*, one row each, labelled by the name that game
+was played under (ADR 0029) — so a rename never relabels an older row, and a
+shared device that played under two names shows two rows. Your own row is marked
+by `aria-current`, a visually-hidden "(you)" and a tint — three channels, never
 colour alone (§8). It loads when the tab is opened, not at boot, and an empty
 board is a successful answer rather than an error.
 
