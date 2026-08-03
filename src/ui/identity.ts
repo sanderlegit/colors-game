@@ -9,10 +9,14 @@
  * Two things a player can do here, both through the same form and the same
  * `POST /api/name`:
  *
- * - **Set a name** while `anonymous` — the first name after a game.
+ * - **Set a name** while `anonymous` — the first name after a game. It claims the
+ *   games the player has not named yet (ADR 0032), including the one just played,
+ *   so they appear on the board under the chosen name instead of a placeholder.
  * - **Change name** while `named` — "Change name" reveals the form pre-filled;
- *   submitting overwrites (`setName`, ADR 0024). Scores and board position are
- *   kept; a rename is not a new identity.
+ *   submitting sets the prefill and names the current game (`setName`, ADR 0029,
+ *   0032). It is not a new identity — but it does **not** move earlier games: the
+ *   board reads each game's own name now, so past entries keep the name they were
+ *   played under.
  *
  * There is **no forget/delete** here (ADR 0025): deletion is an operator action
  * (`just delete-player`), so the block never destroys anything.

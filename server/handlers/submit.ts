@@ -43,6 +43,7 @@ import { jsonResponse, problem } from "../http/json";
 import { bestGameName, currentPlayer, mintPlayer, rankOf } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
 import { setPlayerName } from "../names";
+import { placeholderName } from "../placeholder";
 import { replayGame } from "../replay";
 import { storedGuesses } from "../stored";
 import { submissionCounters } from "../telemetry";
@@ -142,12 +143,13 @@ export const submitResult: Handler = async (
   }
 
   const scored = replayGame(game.seed, game.difficulty, submitted.guesses);
-  // The name the game is submitted under, snapshotted onto the row (ADR 0029):
-  // the name in this submission if it carries one, else the identity's current
-  // name. Null when neither exists yet. A later rename never rewrites this.
+  // The name the game is submitted under, snapshotted onto the row (ADR 0029,
+  // 0032): the name in this submission if it carries one, else the identity's
+  // current name, else a stable placeholder handle so a player who finishes
+  // without naming still lands on the board. A later `setName` claims it back.
   const submittedName = submitted.name;
-  const gameName = submittedName ?? player.name;
-  const gameNameKey = submittedName === undefined ? player.nameKey : nameKey(submittedName);
+  const gameName = submittedName ?? player.name ?? placeholderName(player.id);
+  const gameNameKey = nameKey(gameName);
   const finished = await context.repo.finishGame({
     gameId: game.id,
     playerId: player.id,

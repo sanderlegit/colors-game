@@ -194,16 +194,17 @@ exist, and `games.flags` has two defined bits. What is left:
   deletes every row for a day that is over, bounded at 500 a run. This was a
   privacy gap rather than a disk one — they are the only per-IP-derived rows in
   the system and ADR 0015 justifies them partly on being short-lived.
-- **The name-snapshot rollout is mid-flight — the *contract* step is not done.**
-  ADR 0029 staged the display-name rework as expand → reader flip → contract.
-  **Expand** ✅ (migration `0006`: `games.name` / `games.name_key`, stamped at
-  submit, existing rows backfilled) and the **reader flip** ✅ (the board and
-  `rankOf` read `games`; a rename relabels only the most-recent game) are done.
-  The **contract** is open: `players_board` and `players.best_score` are now
-  vestigial *for the board* — `submit` still writes `best_score`, nothing reads it
-  for ranking — and the follow-up is to drop the `players_board` index and remove
-  `best_score`'s board role once nothing depends on them. `best_score`'s
-  personal-best role (the `isPersonalBest` flag) is separate and stays.
+- **The name-snapshot rollout is complete (ADR 0029, refined by 0032).** Staged
+  expand → reader flip → contract. **Expand** ✅ (migration `0006`: `games.name` /
+  `games.name_key`, stamped at submit, existing rows backfilled), **reader flip**
+  ✅ (the board and `rankOf` read `games`), and **contract** ✅ (migration `0008`
+  drops the now-unused `players_board` index — no query orders `players` by score
+  any more). ADR 0032 then refined naming: an unnamed finisher gets a placeholder
+  handle so they still land on the board, and setting a name claims all of a
+  player's unclaimed games. `players.best_score` and `best_game_id` are **kept,
+  not vestigial**: `best_score` is the score a rank is counted at and `/api/me`
+  shows it, and `best_game_id` is how `rankOf` resolves the name the player's best
+  game was played under (`bestGameName`).
 - **The board tiebreak is name, then `player_id`, not "first to achieve".** Since
   ADR 0029 the global and per-seed boards read game entries — best game per
   `(player, name_key)`, ordered `(total_score DESC, name ASC, player_id ASC)` —
@@ -257,7 +258,7 @@ exist, and `games.flags` has two defined bits. What is left:
 - **~~`server/db/d1.ts` has no automated coverage.~~** Mostly closed by 3.7.
   `e2e/backend.spec.ts` executes `insertGame`, `findGame`, `finishGame`,
   `insertPlayer`, `findPlayerByTokenHash`, `bumpMintBucket`,
-  `countGamesStartedSince`, `recordFinishedGame`, `claimName`, `topPlayers` and
+  `countGamesStartedSince`, `recordFinishedGame`, `setName`, `topPlayers` and
   `countPlayersAbove` against a real binding on every push, and asserts on values
   that came back through them. Two caveats worth knowing:
   - `touchPlayer` and `recordTelemetry` run *inside* `waitUntil`. They execute,

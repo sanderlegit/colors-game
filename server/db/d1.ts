@@ -24,6 +24,8 @@
 
 import type { Difficulty } from "../../src/domain/round";
 import { asEnum, asFiniteNumber } from "../../src/shared/decode";
+import { nameKey } from "../decode";
+import { placeholderName } from "../placeholder";
 import type {
   AggregateResult,
   BoardRow,
@@ -285,12 +287,14 @@ export function d1Repo(db: D1Database): Repo {
       readonly key: string;
       readonly at: number;
     }): Promise<void> {
-      // Two writes, atomically (ADR 0029). Names are not unique (ADR 0024), so
-      // there is no index to violate. The first sets the identity's prefill name.
-      // The second names the game the player just finished — the board reads the
-      // game's own name, so "set username" names the game you just played. Older
-      // games keep the name they were played under; only the most recent moves,
-      // which is what stops a rename from rewriting the board.
+      // Three writes, atomically (ADR 0029, 0032). Names are not unique
+      // (ADR 0024), so there is no index to violate. The first records the audit
+      // row; the second sets the identity's prefill name; the third claims the
+      // player's *unclaimed* games onto the new name — the ones with no name, the
+      // ones still under this player's placeholder handle, and the game just
+      // finished (which may carry an inherited name). Games under some *other*
+      // real name are left alone, so a rename never rewrites the board's history.
+      const placeholderKey = nameKey(placeholderName(input.playerId));
       await db.batch([
         // First, so it reads the *old* key before the UPDATE overwrites it. The
         // `IS NOT` guard records a first claim (null → key) and a real rename, but
@@ -313,13 +317,14 @@ export function d1Repo(db: D1Database): Repo {
         db
           .prepare(
             `UPDATE games SET name = ?1, name_key = ?2
-              WHERE id = (
-                SELECT id FROM games
-                 WHERE player_id = ?3 AND status = 'finished'
-                 ORDER BY finished_at DESC, id DESC LIMIT 1
-              )`,
+              WHERE player_id = ?3 AND status = 'finished'
+                AND (name_key IS NULL OR name_key = ?4 OR id = (
+                  SELECT id FROM games
+                   WHERE player_id = ?3 AND status = 'finished'
+                   ORDER BY finished_at DESC, id DESC LIMIT 1
+                ))`,
           )
-          .bind(input.name, input.key, input.playerId),
+          .bind(input.name, input.key, input.playerId, placeholderKey),
       ]);
     },
 
