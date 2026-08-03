@@ -23,11 +23,12 @@
  *
  * ## Ordering
  *
- * The board is ordered `best_score DESC, name ASC, id ASC`, which is exactly the
- * `players_board` index. `countPlayersAbove` counts under that same order, so a
- * player's rank and their row's position on the board cannot disagree. The `id`
- * tiebreak is load-bearing now that names repeat: without it two equal-scoring
- * `ada`s would tie and the counted rank would disagree with the board. See the
+ * The board is ordered `total_score DESC, name ASC, player_id ASC` over the game
+ * entries `BOARD_ENTRIES` builds (ADR 0029). `countPlayersAbove` counts under
+ * that same order, so a player's rank and their row's position on the board
+ * cannot disagree. The `player_id` tiebreak is load-bearing now that names
+ * repeat: without it two equal-scoring `ada`s would tie and the counted rank
+ * would disagree with the board. See the
  * note on `countPlayersAbove`.
  */
 
@@ -309,15 +310,13 @@ export type Repo = {
    * How many ranked players sort above `key`. Rank is that plus one.
    *
    * **The tiebreaks are name then id, not `finished_at`.** The brief specified
-   * "first to achieve ranks higher", but `players` stores no timestamp for the
-   * best game — only `best_game_id` — so that order would need a join through
-   * `games` on every rank query, and it would not agree with the
-   * `players_board` index, which is `(best_score DESC, name, id)`. A rank that
-   * disagrees with the board it is displayed next to is a bug report. `id` is
-   * the final tiebreak because names are not unique (ADR 0024) and `name` alone
-   * no longer breaks every tie; it is the primary key, so the order is total. If
-   * the `finished_at` tiebreak is wanted instead, add `best_finished_at` to
-   * `players` and change the index, `topPlayers` and this method in one commit.
+   * "first to achieve ranks higher", but a game entry is ordered
+   * `total_score DESC, name ASC, player_id ASC` (ADR 0029) — `finished_at` is not
+   * in that order, so a rank counted here agrees with the board position by
+   * construction. `player_id` is the final tiebreak because names are not unique
+   * (ADR 0024) and `name` alone no longer breaks every tie; it is unique and
+   * stable, so the order is total. A `finished_at` ("first to achieve") tiebreak
+   * would mean threading it through `BOARD_ENTRIES` and this method together.
    */
   countPlayersAbove(key: RankKey): Promise<number>;
 
