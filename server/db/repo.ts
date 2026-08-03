@@ -69,6 +69,14 @@ export type Game = {
   readonly kind: GameKind;
   readonly startedAt: number;
   readonly finishedAt: number | null;
+  /**
+   * The display name the game was submitted under, snapshotted at finish, and
+   * its folded key (ADR 0029). Null on an active game and on a game finished
+   * before the player had a name. This — not the mutable `players.name` — is
+   * what the board displays, so a later rename cannot rewrite it.
+   */
+  readonly name: string | null;
+  readonly nameKey: string | null;
 };
 
 export type NewPlayer = {
@@ -104,6 +112,13 @@ export type FinishGame = {
   readonly guessesJson: string;
   readonly flags: number;
   readonly finishedAt: number;
+  /**
+   * The name (and folded key) to snapshot onto this game — the name it is being
+   * submitted under (ADR 0029). Null when the submitter has no name yet; a later
+   * `setName` does not backfill it, which is the point.
+   */
+  readonly name: string | null;
+  readonly nameKey: string | null;
 };
 
 /** What the aggregate update reports back, so the caller need not re-read the row. */

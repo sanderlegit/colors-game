@@ -301,6 +301,8 @@ describe("losing the race and other unhappy paths", () => {
       guessesJson: "not json",
       flags: 0,
       finishedAt: client.now(),
+      name: null,
+      nameKey: null,
     });
 
     const response = await client.send("POST", "/api/games/corrupt/result", {

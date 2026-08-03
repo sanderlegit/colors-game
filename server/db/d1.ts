@@ -51,7 +51,7 @@ const KINDS: readonly GameKind[] = ["open", "challenge"];
 const PLAYER_COLUMNS =
   "id, name, name_key, name_changes, name_changed_at, best_score, best_game_id, games_played, created_at, last_seen_at";
 const GAME_COLUMNS =
-  "id, player_id, status, seed, difficulty, memorize_ms, total_score, guesses_json, flags, kind, started_at, finished_at";
+  "id, player_id, status, seed, difficulty, memorize_ms, total_score, guesses_json, flags, kind, started_at, finished_at, name, name_key";
 
 function corrupt(column: string): never {
   throw new Error(`unreadable column from D1: ${column}`);
@@ -103,6 +103,8 @@ function toGame(row: Record<string, unknown>): Game {
     kind: asEnum(row.kind, KINDS) ?? corrupt("kind"),
     startedAt: num(row, "started_at"),
     finishedAt: nullableNum(row, "finished_at"),
+    name: nullableText(row, "name"),
+    nameKey: nullableText(row, "name_key"),
   };
 }
 
@@ -206,7 +208,8 @@ export function d1Repo(db: D1Database): Repo {
         .prepare(
           `UPDATE games
               SET player_id = ?1, status = 'finished', total_score = ?2,
-                  guesses_json = ?3, flags = ?4, finished_at = ?5
+                  guesses_json = ?3, flags = ?4, finished_at = ?5,
+                  name = ?7, name_key = ?8
             WHERE id = ?6 AND status = 'active'`,
         )
         .bind(
@@ -216,6 +219,8 @@ export function d1Repo(db: D1Database): Repo {
           input.flags,
           input.finishedAt,
           input.gameId,
+          input.name,
+          input.nameKey,
         )
         .run();
       return result.meta.changes > 0;
