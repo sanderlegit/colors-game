@@ -23,7 +23,7 @@
  */
 
 import type { RequestContext } from "./context";
-import type { Player } from "./db/repo";
+import type { Player, RankKey } from "./db/repo";
 import { IDENTITY_COOKIE, readCookie, setCookie } from "./http/cookie";
 import {
   dayNumber,
@@ -72,42 +72,37 @@ export async function mintPlayer(context: RequestContext, at: number): Promise<M
 }
 
 /**
- * Where a player sits on the board, one-based.
- *
- * A player with no name is not on the board at all, so this answers where they
- * *would* sit — the client's contract has no null rank on a submission, and
- * "you would be 7th if you set a name" is the honest reading. The empty name
- * sorts first among equal scores, which flatters them by at most one place.
- *
- * `id` is passed as the final tiebreak: names are not unique (ADR 0024), so two
- * equal-scoring players with the same name are ordered by id, and the rank this
- * returns then matches the board row's position.
- *
- * `name` is the name the player's *best game* was played under (`bestGameName`),
- * not the mutable `players.name` — since the board reads the game's snapshot
- * (ADR 0029), ranking against the identity's current name could disagree with
- * the row it sits on the moment the two differ (after a rename).
+ * The rank (1-based) of a name's board row on the DEFAULT `best` board — the
+ * name-grouped, cross-player board (ADR 0033). Rank always reflects this board,
+ * whatever view the caller is showing.
  */
-export async function rankOf(
-  context: RequestContext,
-  bestScore: number,
-  name: string | null,
-  id: number,
-): Promise<number> {
-  const above = await context.repo.countPlayersAbove({ bestScore, name: name ?? "", id });
-  return above + 1;
+export async function rankOf(context: RequestContext, key: RankKey): Promise<number> {
+  return (await context.repo.countPlayersAbove(key)) + 1;
 }
 
 /**
- * The name a player's best game was played under — the label its board entry
- * carries (ADR 0029) — or null if that game had no name. This is the name
- * `rankOf` must rank against so a counted rank matches the board row exactly.
+ * The rank of the name a game was played under. Always a number: `fallback`
+ * (this game's own score/name/id) stands in when the name has no board game yet
+ * — a flagged or zero-score game. Used on submit.
  */
-export async function bestGameName(
+export async function rankForGame(
   context: RequestContext,
-  bestGameId: string | null,
-): Promise<string | null> {
-  if (bestGameId === null) return null;
-  const game = await context.repo.findGame(bestGameId);
-  return game?.name ?? null;
+  nameKey: string,
+  fallback: RankKey,
+): Promise<number> {
+  const best = nameKey === "" ? null : await context.repo.bestGameForName(nameKey);
+  return rankOf(context, best ?? fallback);
+}
+
+/**
+ * The rank of a player's name on the default board, or null when they have no
+ * name or no game on it. Used by `/api/me`.
+ */
+export async function rankForNameOrNull(
+  context: RequestContext,
+  nameKey: string | null,
+): Promise<number | null> {
+  if (nameKey === null || nameKey === "") return null;
+  const best = await context.repo.bestGameForName(nameKey);
+  return best === null ? null : rankOf(context, best);
 }

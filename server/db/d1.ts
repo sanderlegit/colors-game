@@ -29,6 +29,7 @@ import { placeholderName } from "../placeholder";
 import type {
   AggregateResult,
   BoardRow,
+  BoardView,
   ClientErrorReport,
   ExpireStaleGames,
   FinishGame,
@@ -131,26 +132,38 @@ const ORPHAN_PLAYERS = `SELECT id FROM players
    LIMIT ?2`;
 
 /**
- * A leaderboard entry set (ADR 0029). One row per `(player_id, name_key)`: the
- * best finished, unflagged, `open` game a player played *under a given name*. The
- * name comes from the game (`g.name`), snapshotted at submission, never from the
- * mutable `players` row — so a rename cannot rewrite an entry, and two names on
- * one identity (a shared device) are two entries. `kind = 'open'` keeps
- * challenge games off the global board (ADR 0026); the seed board drops that
- * filter and adds `g.seed`. The window's `total_score DESC, g.id ASC` picks one
- * game per group deterministically; the caller supplies the outer order.
+ * The `all` board (ADR 0033): every finished, unflagged, `open`, named game
+ * scoring above zero, one game per row. The name comes from the game (`g.name`,
+ * ADR 0029), never the mutable `players` row, so a rename cannot relabel a row.
+ * `kind = 'open'` keeps challenge games off the global board (ADR 0026); the seed
+ * board drops that filter and adds `g.seed`. The caller supplies the outer order.
  *
- * This exact predicate is the partial index `games_name_board` (migration 0006).
+ * This predicate is the partial index `games_name_board` (migration 0006).
  */
-const BOARD_ENTRIES = `SELECT player_id, name, best_score, game_id FROM (
+const BOARD_FILTER =
+  "g.status = 'finished' AND g.flags = 0 AND g.kind = 'open' AND g.name_key IS NOT NULL AND g.total_score > 0";
+
+const BOARD_ENTRIES = `SELECT g.player_id AS player_id, g.name AS name,
+         g.total_score AS best_score, g.id AS game_id
+    FROM games g
+   WHERE ${BOARD_FILTER}`;
+
+/**
+ * The `best` board (ADR 0033): one row per NAME across all players — the single
+ * best game played under each `name_key`, whoever played it. Two different
+ * accounts that both played as `ada` collapse to one `ada` row. The window picks
+ * the best game per name (`total_score DESC, g.id ASC`); `player_id` on the
+ * surviving row is that game's player, which `isYou` compares against — so a
+ * weaker same-name player does not see themselves highlighted.
+ */
+const BEST_PER_NAME = `SELECT player_id, name, best_score, game_id FROM (
     SELECT g.player_id AS player_id, g.name AS name,
            g.total_score AS best_score, g.id AS game_id,
            ROW_NUMBER() OVER (
-             PARTITION BY g.player_id, g.name_key ORDER BY g.total_score DESC, g.id ASC
+             PARTITION BY g.name_key ORDER BY g.total_score DESC, g.id ASC
            ) AS rn
       FROM games g
-     WHERE g.status = 'finished' AND g.flags = 0 AND g.kind = 'open'
-       AND g.name_key IS NOT NULL AND g.total_score > 0
+     WHERE ${BOARD_FILTER}
   ) WHERE rn = 1`;
 
 export function d1Repo(db: D1Database): Repo {
@@ -370,13 +383,14 @@ export function d1Repo(db: D1Database): Repo {
       return result.meta.changes;
     },
 
-    async topPlayers(limit: number): Promise<readonly BoardRow[]> {
-      // The global board is the best game per `(player, name)` (ADR 0029), read
-      // from `games` so a rename cannot relabel a past entry — see BOARD_ENTRIES.
+    async topPlayers(limit: number, view: BoardView): Promise<readonly BoardRow[]> {
+      // `best` = one row per name across players; `all` = one row per game
+      // (ADR 0033). Both share the order and the game-snapshot name (ADR 0029),
+      // so a rename never relabels a row.
       const result = await db
         .prepare(
-          `${BOARD_ENTRIES}
-            ORDER BY best_score DESC, name ASC, player_id ASC
+          `${view === "all" ? BOARD_ENTRIES : BEST_PER_NAME}
+            ORDER BY best_score DESC, name ASC, game_id ASC
             LIMIT ?1`,
         )
         .bind(limit)
@@ -389,28 +403,31 @@ export function d1Repo(db: D1Database): Repo {
       }));
     },
 
-    async topPlayersBySeed(seed: number, limit: number): Promise<readonly BoardRow[]> {
-      // The same entry shape as the global board, filtered to one seed and
-      // *including* challenge games (ADR 0026) — the open game that originated the
-      // seed competes on it too. The name is the game's own snapshot (`g.name`,
-      // ADR 0029), so a rename does not relabel a seed entry either. One row per
-      // `(player, name)`, ties broken by `total_score DESC, g.id ASC`.
+    async topPlayersBySeed(
+      seed: number,
+      limit: number,
+      view: BoardView,
+    ): Promise<readonly BoardRow[]> {
+      // The seed board (ADR 0026, 0033) in the requested view. Both `open` and
+      // `challenge` games count — the `open` filter is dropped and `g.seed` added
+      // — so the query is built here rather than from the global constants.
+      const filter =
+        "g.seed = ?1 AND g.status = 'finished' AND g.flags = 0 AND g.name_key IS NOT NULL AND g.total_score > 0";
+      const board =
+        view === "all"
+          ? `SELECT g.player_id AS player_id, g.name AS name,
+                    g.total_score AS best_score, g.id AS game_id
+               FROM games g WHERE ${filter}`
+          : `SELECT player_id, name, best_score, game_id FROM (
+               SELECT g.player_id AS player_id, g.name AS name,
+                      g.total_score AS best_score, g.id AS game_id,
+                      ROW_NUMBER() OVER (
+                        PARTITION BY g.name_key ORDER BY g.total_score DESC, g.id ASC
+                      ) AS rn
+                 FROM games g WHERE ${filter}
+             ) WHERE rn = 1`;
       const result = await db
-        .prepare(
-          `SELECT player_id, name, best_score, game_id FROM (
-             SELECT g.player_id AS player_id, g.name AS name,
-                    g.total_score AS best_score, g.id AS game_id,
-                    ROW_NUMBER() OVER (
-                      PARTITION BY g.player_id, g.name_key ORDER BY g.total_score DESC, g.id ASC
-                    ) AS rn
-               FROM games g
-              WHERE g.seed = ?1 AND g.status = 'finished' AND g.flags = 0
-                AND g.name_key IS NOT NULL AND g.total_score > 0
-           )
-           WHERE rn = 1
-           ORDER BY best_score DESC, name ASC, player_id ASC
-           LIMIT ?2`,
-        )
+        .prepare(`${board} ORDER BY best_score DESC, name ASC, game_id ASC LIMIT ?2`)
         .bind(seed, limit)
         .all();
       return result.results.map((row) => ({
@@ -422,19 +439,37 @@ export function d1Repo(db: D1Database): Repo {
     },
 
     countPlayersAbove(key: RankKey): Promise<number> {
-      // Rank against the same entry set the board is drawn from (ADR 0029), so a
-      // counted rank and a board position cannot disagree. `key` is the entry
-      // being ranked: its score, the name its best game was played under, and the
-      // player id as the final tiebreak — the outer order of BOARD_ENTRIES.
+      // Rank always tracks the DEFAULT `best` board (ADR 0033): count the name
+      // rows whose best game outranks `key` under `total_score DESC, name ASC,
+      // game_id ASC`. `key` is a name's own best game (`bestGameForName`).
       return count(
-        `SELECT COUNT(*) AS n FROM (${BOARD_ENTRIES})
+        `SELECT COUNT(*) AS n FROM (${BEST_PER_NAME})
           WHERE best_score > ?1
              OR (best_score = ?1 AND name < ?2)
-             OR (best_score = ?1 AND name = ?2 AND player_id < ?3)`,
+             OR (best_score = ?1 AND name = ?2 AND game_id < ?3)`,
         key.bestScore,
         key.name,
-        key.id,
+        key.gameId,
       );
+    },
+
+    async bestGameForName(nameKey: string): Promise<RankKey | null> {
+      // The row a name occupies on the `best` board: its best finished, unflagged,
+      // open game (ADR 0033). Same order as BEST_PER_NAME's window, so this key is
+      // exactly that name's surviving row.
+      const row = await firstRow(
+        `SELECT total_score AS best_score, name, id AS game_id FROM games g
+          WHERE ${BOARD_FILTER} AND g.name_key = ?1
+          ORDER BY total_score DESC, id ASC LIMIT 1`,
+        nameKey,
+      );
+      return row === null
+        ? null
+        : {
+            bestScore: num(row, "best_score"),
+            name: text(row, "name"),
+            gameId: text(row, "game_id"),
+          };
     },
 
     async bumpMintBucket(bucket: string, day: number): Promise<number> {

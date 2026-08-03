@@ -101,7 +101,10 @@ export type GameApi = {
   submit(req: SubmitRequest): Promise<Result<Submission>>;
   claimName(name: string): Promise<Result<{ readonly name: string }>>;
   /** `forGame` restricts the board to one game's seed; absent is the global board. */
-  leaderboard(forGame?: string): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>>;
+  leaderboard(
+    forGame?: string,
+    mode?: BoardMode,
+  ): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>>;
   /** The per-round breakdown for a finished game, replayed server-side. */
   attempt(gameId: string): Promise<Result<Attempt>>;
 };
@@ -116,6 +119,9 @@ export type ApiOptions = {
 const DEFAULT_BASE_URL = "/api";
 const DEFAULT_TIMEOUT_MS = 8000;
 const NO_CONTENT = 204;
+
+/** Which board the toggle asks for (ADR 0033). `best` is the default. */
+export type BoardMode = "best" | "all";
 
 /** A leaderboard row has to fit a phone; longer is corruption, not a name. */
 export const MAX_NAME_LENGTH = 24;
@@ -343,11 +349,13 @@ export function createApi(options: ApiOptions = {}): GameApi {
     },
     async leaderboard(
       forGame?: string,
+      mode?: BoardMode,
     ): Promise<Result<{ readonly entries: readonly LeaderboardEntry[] }>> {
-      const path =
-        forGame === undefined
-          ? "/leaderboard"
-          : `/leaderboard?forGame=${encodeURIComponent(forGame)}`;
+      const params = new URLSearchParams();
+      if (forGame !== undefined) params.set("forGame", forGame);
+      if (mode === "all") params.set("view", "all");
+      const query = params.toString();
+      const path = query === "" ? "/leaderboard" : `/leaderboard?${query}`;
       return decoded(await send("GET", path, undefined), decodeLeaderboard);
     },
     async attempt(gameId: string): Promise<Result<Attempt>> {

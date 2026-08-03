@@ -43,6 +43,14 @@ export type GameStatus = "active" | "finished" | "expired";
  */
 export type GameKind = "open" | "challenge";
 
+/**
+ * Which leaderboard the caller asked for (ADR 0033):
+ * - `best` — one row per *name*, the single best game played under it, across
+ *   all players (so two people who both played as `ada` share one row). Default.
+ * - `all` — every finished game is its own row; a player appears once per game.
+ */
+export type BoardView = "best" | "all";
+
 export type Player = {
   readonly id: number;
   readonly name: string | null;
@@ -143,17 +151,18 @@ export type BoardRow = {
 
 /** The order both the board and the rank count are computed in. */
 export type RankKey = {
+  /** The score of the game being ranked. */
   readonly bestScore: number;
   /** First tiebreak: name, ascending. See `countPlayersAbove`. */
   readonly name: string;
   /**
-   * Final tiebreak: player id, ascending. Names are not unique (ADR 0024), so
-   * `(bestScore, name)` alone is not a total order — two players called `ada` on
-   * the same score would tie, and the rank counted here would disagree with the
-   * board row's position. `id` is the unique primary key, so it makes the order
-   * total again; the earlier account sorts first.
+   * Final tiebreak: the game's own id, ascending. Since ADR 0033 every game is
+   * its own board row, so a rank is a *game's* position; `(bestScore, name)`
+   * alone is not a total order — two games with the same score and name would
+   * tie — and `game_id` is unique, so it makes the order total and matches the
+   * board's `id ASC` exactly.
    */
-  readonly id: number;
+  readonly gameId: string;
 };
 
 /**
@@ -322,31 +331,42 @@ export type Repo = {
    */
   deletePlayer(playerId: number): Promise<void>;
 
-  topPlayers(limit: number): Promise<readonly BoardRow[]>;
-
   /**
-   * The board for one seed (ADR 0026): each named player's best finished,
-   * unflagged game on `seed`, ordered `total_score DESC, name ASC` — the same
-   * order as the global board, so a rank shown here cannot disagree with the
-   * row it sits on. Both `open` and `challenge` games count, so the player who
-   * originated the seed competes on it too. `gameId` on each row is the specific
-   * game that reached the score, not `best_game_id`.
+   * The global board in the requested `view` (ADR 0033): `best` groups by name
+   * across players (one row per name, its single best game); `all` lists every
+   * finished game as its own row. Both order `total_score DESC, name ASC,
+   * game_id ASC` and share the filters `finished, unflagged, open, named,
+   * score > 0`.
    */
-  topPlayersBySeed(seed: number, limit: number): Promise<readonly BoardRow[]>;
+  topPlayers(limit: number, view: BoardView): Promise<readonly BoardRow[]>;
 
   /**
-   * How many ranked players sort above `key`. Rank is that plus one.
+   * The board for one seed (ADR 0026, 0033) in the requested `view`. Both `open`
+   * and `challenge` games count, so the player who originated the seed competes
+   * on it too. Same order and filters as the global board (minus the `open`
+   * restriction). `gameId` on each row is the specific game, not `best_game_id`.
+   */
+  topPlayersBySeed(seed: number, limit: number, view: BoardView): Promise<readonly BoardRow[]>;
+
+  /**
+   * How many rows sort above `key` on the DEFAULT (`best`) board — one row per
+   * name — so rank always tracks the best-per-name board whatever view is shown
+   * (ADR 0033). `key` is a name's best game: `(bestScore, name, gameId)`.
    *
-   * **The tiebreaks are name then player id, not `finished_at`.** The brief
-   * specified "first to achieve ranks higher", but a game entry is ordered
-   * `total_score DESC, name ASC, player_id ASC` (ADR 0029) — `finished_at` is not
-   * in that order, so a rank counted here agrees with the board position by
-   * construction. `player_id` is the final tiebreak because names are not unique
-   * (ADR 0024) and `name` alone no longer breaks every tie; it is unique and
-   * stable, so the order is total. A `finished_at` ("first to achieve") tiebreak
-   * would mean threading it through `BOARD_ENTRIES` and this method together.
+   * Ordered `total_score DESC, name ASC, game_id ASC`. `game_id` is the final
+   * tiebreak because scores and names both repeat and it is unique, so the order
+   * is total and matches the board's `id ASC`. A `finished_at` ("first to
+   * achieve") tiebreak would mean threading it through this and the board query.
    */
   countPlayersAbove(key: RankKey): Promise<number>;
+
+  /**
+   * A name's best finished, unflagged, open game — the row it occupies on the
+   * `best` board — as a `RankKey`, or null if the name has no such game. This is
+   * what `rankOf`-style callers rank: everyone sharing a `name_key` shares one
+   * board row, so "your rank" is your name's rank (ADR 0033).
+   */
+  bestGameForName(nameKey: string): Promise<RankKey | null>;
 
   /** Upserts the bucket and returns the count *after* the increment. */
   bumpMintBucket(bucket: string, day: number): Promise<number>;

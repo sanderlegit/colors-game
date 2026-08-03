@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { asArray, asRecord } from "../../src/shared/decode";
 import { type Client, createClient, jsonRecord, playGame } from "../app.fixture";
-import type { BoardRow, Repo } from "../db/repo";
+import type { BoardRow, BoardView, Repo } from "../db/repo";
 import { BOARD_SIZE } from "./leaderboard";
 
 /** A named player with a score, which is what it takes to reach the board. */
@@ -92,9 +92,9 @@ describe("GET /api/leaderboard", () => {
     const inner = createClient().repo;
     const counting: Repo = {
       ...inner,
-      topPlayers: (limit: number): Promise<readonly BoardRow[]> => {
+      topPlayers: (limit: number, view: BoardView): Promise<readonly BoardRow[]> => {
         asked = limit;
-        return inner.topPlayers(limit);
+        return inner.topPlayers(limit, view);
       },
     };
     await createClient({ repo: (): Repo => counting }).send("GET", "/api/leaderboard");

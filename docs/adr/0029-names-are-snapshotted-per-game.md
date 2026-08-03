@@ -1,6 +1,6 @@
 # 0029 — The display name is snapshotted onto each game; the board reads the game, not the identity
 
-Date: 2026-08-03 · Status: accepted — **revises 0024, 0025, 0026; extends 0016**
+Date: 2026-08-03 · Status: accepted — **revises 0024, 0025, 0026; extends 0016**; the board grouping is revised by [0033](0033-leaderboard-best-per-name-or-all-games.md)
 
 ## Context
 

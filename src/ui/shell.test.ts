@@ -39,6 +39,7 @@ function setup() {
       onFilter: vi.fn(),
       onClearFilter: vi.fn(),
       onPlaySeed: vi.fn(),
+      onViewChange: vi.fn(),
     },
     identity: { onClaim },
     onTabSelect,

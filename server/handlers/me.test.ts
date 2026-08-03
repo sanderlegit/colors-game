@@ -67,6 +67,6 @@ describe("no self-serve delete (ADR 0025)", () => {
     const response = await client.send("DELETE", "/api/me");
     expect(response.status).toBe(405);
     // The player and their board row are untouched.
-    await expect(client.repo.topPlayers(10)).resolves.toMatchObject([{ name: "Ada" }]);
+    await expect(client.repo.topPlayers(10, "best")).resolves.toMatchObject([{ name: "Ada" }]);
   });
 });

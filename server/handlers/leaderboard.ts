@@ -33,7 +33,7 @@
  */
 
 import type { Handler, RequestContext } from "../context";
-import type { BoardRow } from "../db/repo";
+import type { BoardRow, BoardView } from "../db/repo";
 import { jsonResponse } from "../http/json";
 import { currentPlayer } from "../identity";
 
@@ -50,15 +50,25 @@ export const BOARD_SIZE = 50;
  * referenced game does not exist. Resolving the seed is one extra read that the
  * global board does not pay.
  */
-async function seedRows(context: RequestContext, forGame: string): Promise<readonly BoardRow[]> {
+/** `?view=all` lists every game; anything else (the default) is best-per-name. */
+function boardView(params: URLSearchParams): BoardView {
+  return params.get("view") === "all" ? "all" : "best";
+}
+
+async function seedRows(
+  context: RequestContext,
+  forGame: string,
+  view: BoardView,
+): Promise<readonly BoardRow[]> {
   const game = await context.repo.findGame(forGame);
-  return game === null ? [] : context.repo.topPlayersBySeed(game.seed, BOARD_SIZE);
+  return game === null ? [] : context.repo.topPlayersBySeed(game.seed, BOARD_SIZE, view);
 }
 
 export const getLeaderboard: Handler = async (context: RequestContext): Promise<Response> => {
   const forGame = context.url.searchParams.get("forGame");
+  const view = boardView(context.url.searchParams);
   const [rows, player] = await Promise.all([
-    forGame === null ? context.repo.topPlayers(BOARD_SIZE) : seedRows(context, forGame),
+    forGame === null ? context.repo.topPlayers(BOARD_SIZE, view) : seedRows(context, forGame, view),
     currentPlayer(context),
   ]);
 

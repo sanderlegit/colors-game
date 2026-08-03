@@ -40,7 +40,7 @@ import type { Handler, RequestContext } from "../context";
 import type { Game, Player } from "../db/repo";
 import { decodeSubmit, nameKey, readJsonBody, type SubmitBody } from "../decode";
 import { jsonResponse, problem } from "../http/json";
-import { bestGameName, currentPlayer, mintPlayer, rankOf } from "../identity";
+import { currentPlayer, mintPlayer, rankForGame } from "../identity";
 import { GAME_TTL_MS, minimumElapsedMs } from "../limits";
 import { setPlayerName } from "../names";
 import { placeholderName } from "../placeholder";
@@ -79,12 +79,13 @@ async function replayStored(
   }
 
   const scored = replayGame(game.seed, game.difficulty, storedGuesses(game));
-  const rank = await rankOf(
-    context,
-    player.bestScore,
-    await bestGameName(context, player.bestGameId),
-    player.id,
-  );
+  // Every game is its own board row (ADR 0033), so a resubmit reports this
+  // game's own position — its stored score, the name it was played under, its id.
+  const rank = await rankForGame(context, game.nameKey ?? "", {
+    bestScore: game.totalScore,
+    name: game.name ?? "",
+    gameId: game.id,
+  });
 
   return jsonResponse(
     200,
@@ -202,20 +203,22 @@ export const submitResult: Handler = async (
       ? null
       : await setPlayerName(context.repo, player.id, submitted.name, now);
   const name = landed ?? player.name;
-  // Rank against the name the player's best game was played under (ADR 0029): if
-  // this submission is that game, it is the name just stamped on it; otherwise
-  // it is whatever the prior best game carried. Not `players.name`, which the
-  // board no longer reads.
-  const rankName = aggregate.isPersonalBest
-    ? gameName
-    : await bestGameName(context, player.bestGameId);
+  // Rank tracks the default best-per-name board (ADR 0033): the rank of the name
+  // this game was submitted under. `gameName`/`gameNameKey` are what the game was
+  // stamped with; the fallback covers a flagged or zero game whose name has no
+  // board row of its own.
+  const rank = await rankForGame(context, gameNameKey, {
+    bestScore: scored.totalScore,
+    name: gameName,
+    gameId: game.id,
+  });
 
   return jsonResponse(
     200,
     {
       totalScore: scored.totalScore,
       rounds: scored.rounds,
-      rank: await rankOf(context, aggregate.bestScore, rankName, player.id),
+      rank,
       isPersonalBest: aggregate.isPersonalBest,
       name,
       claimed: landed !== null,

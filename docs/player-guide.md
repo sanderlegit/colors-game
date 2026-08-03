@@ -85,6 +85,17 @@ gap however you prefer to read it.
 
 ## Your name on the leaderboard
 
+The board has two views you can toggle between:
+
+- **Best per name** (the default) shows one row per name — the single best game
+  anyone played under it. If two people both call themselves *ada*, the board
+  shows one *ada* row: the better game.
+- **All games** shows every game as its own row, so if you played three good
+  games they all appear.
+
+Whichever view you are looking at, your rank is your *name's* rank on the
+best-per-name board.
+
 There is no account, no password and no email. When you finish a game we offer
 you a username, and if you set one we remember it with a cookie in this browser.
 
