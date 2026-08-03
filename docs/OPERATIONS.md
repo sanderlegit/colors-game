@@ -668,10 +668,18 @@ triggers best-effort.
 | `games_expired` | `games` still `active` → `expired` | `GAME_TTL_MS`, 30 min | `games_sweep` indexed these from day one and nothing read it, so `expired` was an unreachable status |
 | `mint_buckets_deleted` | `mint_buckets` rows for past days | previous day | **Privacy, not disk.** These are the only per-IP-derived rows in the system, and ADR 0015 justifies them partly on being short-lived |
 | `client_errors_deleted` | `client_errors` past retention | 30 days | The write-side purge bounds new rows only; once reports stop, old ones stay forever |
-| `orphan_players_deleted` | `players` with `games_played = 0`, and their games | 7 days | ADR 0011. Such a player holds no name and no board position |
+| `orphan_players_deleted` | `players` with `games_played = 0` **and `name_key IS NULL`**, and their games | 7 days | ADR 0011. Such a player holds no name and no board position — so the `name_key` guard is what makes that true |
 
 Every pass is bounded by `SWEEP_BATCH_LIMIT` (500), takes the oldest rows first,
 and reports its count. A capped pass is continued by the next run.
+
+> **The orphan pass and a leaderboard reset interact.** The pass reaps
+> `games_played = 0` rows, and its safety rests on those rows being nameless. A
+> bulk `UPDATE players SET games_played = 0` — which the score-retune reset does
+> (`migrations/0005`) — zeroes that column for *named* players too. The
+> `name_key IS NULL` guard on the predicate is what stops the next sweep deleting
+> them; do not remove it, and never write a reset that clears `games_played`
+> without checking this pass still excludes the rows it clears.
 
 **It does not release names.** ADR 0011 also asks for names idle over 12 months
 to be freed; that is deliberately not built, and ADR 0023 § Why the name release

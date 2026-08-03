@@ -216,7 +216,7 @@ export type PurgeClientErrors = {
 };
 
 export type PurgeOrphanPlayers = {
-  /** Only rows with `games_played = 0` are eligible, and only past this. */
+  /** Only nameless rows with `games_played = 0` are eligible, and only past this. */
   readonly createdBefore: number;
   readonly limit: number;
 };
@@ -349,10 +349,13 @@ export type Repo = {
    * Delete players who never finished a game, and their games with them.
    * Returns the number of *players* removed.
    *
-   * Deliberately narrow: `games_played = 0` only. A player who has finished one
-   * game may own a name and a board position, and deleting either is not
-   * recoverable. ADR 0011 also asks for names idle over 12 months to be
-   * released; that half is **not** implemented and `server/sweep.ts` records why.
+   * Deliberately narrow: `games_played = 0` **and `name_key IS NULL`**. A player
+   * who has finished a game — or who holds a name — may own a board position, and
+   * deleting either is not recoverable. The name guard is not redundant: a bulk
+   * reset of `games_played` (`migrations/0005`) can leave named rows at zero
+   * games, and without it this pass would delete them. ADR 0011 also asks for
+   * names idle over 12 months to be released; that half is **not** implemented
+   * and `server/sweep.ts` records why.
    */
   deleteOrphanedPlayers(input: PurgeOrphanPlayers): Promise<number>;
 

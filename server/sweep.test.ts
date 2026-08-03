@@ -258,6 +258,21 @@ describe("orphaned players", () => {
     expect(await repo.findPlayerByTokenHash("hash:real")).not.toBeNull();
   });
 
+  it("never deletes a named player, even at zero games (the reset landmine)", async () => {
+    // A bulk `UPDATE players SET games_played = 0` (migrations/0005, the score
+    // retune's board reset) leaves real, named identities at zero games. Without
+    // the `name_key` guard the orphan pass reaps them along with their name — the
+    // opposite of what the reset promised to keep. See ADR 0011/0023.
+    const repo = memoryRepo();
+    const playerId = await addPlayer(repo, "hash:named", NOW - 400 * DAY_MS);
+    await repo.setName({ playerId, name: "Ada", key: "ada", at: NOW - 400 * DAY_MS });
+
+    const outcome = await sweep(repo, NOW);
+
+    expect(outcome.counts.orphan_players_deleted).toBe(0);
+    expect(await repo.findPlayerByTokenHash("hash:named")).not.toBeNull();
+  });
+
   it("keeps a fresh orphan inside the 7-day window", async () => {
     const repo = memoryRepo();
     await addPlayer(repo, "hash:new", NOW - ORPHAN_PLAYER_MAX_AGE_MS + 1000);

@@ -395,7 +395,12 @@ export function memoryRepo(): MemoryRepo {
 
     async deleteOrphanedPlayers(input: PurgeOrphanPlayers): Promise<number> {
       const orphans = [...players.values()]
-        .filter((player) => player.gamesPlayed === 0 && player.createdAt < input.createdBefore)
+        .filter(
+          (player) =>
+            player.gamesPlayed === 0 &&
+            player.nameKey === null &&
+            player.createdAt < input.createdBefore,
+        )
         .sort((a, b) => a.id - b.id)
         .slice(0, input.limit);
       for (const orphan of orphans) removePlayer(orphan.id);
