@@ -2,11 +2,13 @@
  * `GET /api/leaderboard` → 200 `{ entries[] }`, optionally `?forGame=<gameId>`
  * for one seed's board (ADR 0026).
  *
- * Each entry is `{ rank, name, score, isYou, gameId }`. `Repo.topPlayers`
- * returns the rows in the board's order and carries `playerId` for exactly one
- * purpose: setting `isYou` against the caller's own id. The id must not reach
- * the response — it is a stable identifier for a person who has given us nothing
- * but a name, and the client has no use for it. `gameId` *does* go out: it is
+ * Each entry is `{ rank, name, score, isYou, gameId }`. `isYou` marks the
+ * caller's own rows **by name, not by account id** (ADR 0034): a `players` row
+ * is minted per cookie, so the same person on a second device shares their name
+ * but not their id, and an id-only match would light up only some of their rows.
+ * `Repo.topPlayers` still carries `playerId` — used server-side only to fall
+ * back to an id match for a caller who has not named themselves yet, and never
+ * sent to the client. `gameId` *does* go out: it is
  * how a row expands into its attempt and how the seed filter and share link
  * reference a game, and it is already public — `POST /games` hands one back.
  *
@@ -34,6 +36,7 @@
 
 import type { Handler, RequestContext } from "../context";
 import type { BoardRow, BoardView } from "../db/repo";
+import { nameKey } from "../decode";
 import { jsonResponse } from "../http/json";
 import { currentPlayer } from "../identity";
 
@@ -72,12 +75,19 @@ export const getLeaderboard: Handler = async (context: RequestContext): Promise<
     currentPlayer(context),
   ]);
 
+  // Same name = same player for the highlight (ADR 0034). Match the caller's
+  // rows by their folded name when they have one; only a caller with no name yet
+  // falls back to the per-cookie id. `nameKey(row.name)` reproduces the row's
+  // stored `name_key` — the same fold that wrote it — so the compare is exact.
+  const youKey = player?.nameKey ?? null;
   return jsonResponse(200, {
     entries: rows.map((row, index) => ({
       rank: index + 1,
       name: row.name,
       score: row.bestScore,
-      isYou: player !== null && row.playerId === player.id,
+      isYou:
+        player !== null &&
+        (youKey !== null ? nameKey(row.name) === youKey : row.playerId === player.id),
       gameId: row.gameId,
     })),
   });

@@ -42,6 +42,7 @@ the most valuable thing in here.
 | [0031](0031-name-change-audit.md) | A durable `name_changes_audit` table (folded keys) records each rename; a subject-bearing table, deleted with the player and swept at 90 days | accepted — **extends 0014** |
 | [0032](0032-placeholder-names-and-claim-on-set.md) | Unnamed games get a deterministic placeholder handle; setting a name claims all your unclaimed games | accepted — **refines 0029; board grouping revised by 0033** |
 | [0033](0033-leaderboard-best-per-name-or-all-games.md) | Leaderboard toggles Best-per-name (default, groups by name across players) / All-games; rank tracks the best-per-name board | accepted |
+| [0034](0034-isyou-matches-by-name.md) | The leaderboard highlight (`isYou`) matches by name, not by per-cookie account id | accepted — **extends 0033** |
 
 ## Already rejected — do not re-propose without new evidence
 

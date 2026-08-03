@@ -29,6 +29,13 @@ async function board(client: Client, cookie?: null): Promise<readonly Record<str
   return entries(await jsonRecord(response));
 }
 
+/** The all-games view, where a player's every game is its own row (ADR 0033). */
+async function allGamesBoard(client: Client): Promise<readonly Record<string, unknown>[]> {
+  const response = await client.send("GET", "/api/leaderboard?view=all", {});
+  expect(response.status).toBe(200);
+  return entries(await jsonRecord(response));
+}
+
 describe("GET /api/leaderboard", () => {
   it("is empty before anybody has played", async () => {
     await expect(board(createClient())).resolves.toEqual([]);
@@ -49,6 +56,34 @@ describe("GET /api/leaderboard", () => {
     const theirs = (await board(other)).filter((row) => row.isYou === true);
     expect(mine.map((row) => row.name)).toEqual(["Ada"]);
     expect(theirs.map((row) => row.name)).toEqual(["Grace"]);
+  });
+
+  it("marks every row sharing the caller's name, across accounts (ADR 0034)", async () => {
+    // Player ids are minted per cookie, so the same person on a second device is
+    // a different account under the same name. In the all-games view both of
+    // their "sander" games are rows, and the highlight follows the name — so both
+    // light up, not just the current cookie's.
+    const host = createClient();
+    await playGame(host, { name: "sander" });
+    const secondDevice = await contender(host, "b", "sander");
+    await contender(host, "c", "Grace");
+
+    const forHost = (await allGamesBoard(host)).filter((row) => row.isYou === true);
+    expect(forHost.map((row) => row.name)).toEqual(["sander", "sander"]);
+    // The other "sander" account sees the same two rows as its own.
+    const forSecond = (await allGamesBoard(secondDevice)).filter((row) => row.isYou === true);
+    expect(forSecond).toHaveLength(2);
+  });
+
+  it("falls back to the account id for a caller who has not named themselves", async () => {
+    // No name to match on, so only this cookie's own placeholder row is theirs.
+    const host = createClient();
+    await playGame(host);
+    const other = createClient({ repo: (): Repo => host.repo }, "b");
+    other.setNow(host.now());
+    await playGame(other);
+    const mine = (await allGamesBoard(host)).filter((row) => row.isYou === true);
+    expect(mine).toHaveLength(1);
   });
 
   it("shows a visitor the same rows with nothing marked", async () => {
