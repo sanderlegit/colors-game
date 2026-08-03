@@ -126,6 +126,29 @@ const ORPHAN_PLAYERS = `SELECT id FROM players
    ORDER BY id
    LIMIT ?2`;
 
+/**
+ * A leaderboard entry set (ADR 0029). One row per `(player_id, name_key)`: the
+ * best finished, unflagged, `open` game a player played *under a given name*. The
+ * name comes from the game (`g.name`), snapshotted at submission, never from the
+ * mutable `players` row — so a rename cannot rewrite an entry, and two names on
+ * one identity (a shared device) are two entries. `kind = 'open'` keeps
+ * challenge games off the global board (ADR 0026); the seed board drops that
+ * filter and adds `g.seed`. The window's `total_score DESC, g.id ASC` picks one
+ * game per group deterministically; the caller supplies the outer order.
+ *
+ * This exact predicate is the partial index `games_name_board` (migration 0006).
+ */
+const BOARD_ENTRIES = `SELECT player_id, name, best_score, game_id FROM (
+    SELECT g.player_id AS player_id, g.name AS name,
+           g.total_score AS best_score, g.id AS game_id,
+           ROW_NUMBER() OVER (
+             PARTITION BY g.player_id, g.name_key ORDER BY g.total_score DESC, g.id ASC
+           ) AS rn
+      FROM games g
+     WHERE g.status = 'finished' AND g.flags = 0 AND g.kind = 'open'
+       AND g.name_key IS NOT NULL AND g.total_score > 0
+  ) WHERE rn = 1`;
+
 export function d1Repo(db: D1Database): Repo {
   /** `first()` without a type argument is already `Record<string, unknown>` — no assertion. */
   function firstRow(
@@ -260,17 +283,32 @@ export function d1Repo(db: D1Database): Repo {
       readonly key: string;
       readonly at: number;
     }): Promise<void> {
-      // Names are not unique (ADR 0024), so there is no index to violate and
-      // nothing to catch — a plain conditional-free update.
-      await db
-        .prepare(
-          `UPDATE players
-              SET name = ?1, name_key = ?2,
-                  name_changes = name_changes + 1, name_changed_at = ?3
-            WHERE id = ?4`,
-        )
-        .bind(input.name, input.key, input.at, input.playerId)
-        .run();
+      // Two writes, atomically (ADR 0029). Names are not unique (ADR 0024), so
+      // there is no index to violate. The first sets the identity's prefill name.
+      // The second names the game the player just finished — the board reads the
+      // game's own name, so "set username" names the game you just played. Older
+      // games keep the name they were played under; only the most recent moves,
+      // which is what stops a rename from rewriting the board.
+      await db.batch([
+        db
+          .prepare(
+            `UPDATE players
+                SET name = ?1, name_key = ?2,
+                    name_changes = name_changes + 1, name_changed_at = ?3
+              WHERE id = ?4`,
+          )
+          .bind(input.name, input.key, input.at, input.playerId),
+        db
+          .prepare(
+            `UPDATE games SET name = ?1, name_key = ?2
+              WHERE id = (
+                SELECT id FROM games
+                 WHERE player_id = ?3 AND status = 'finished'
+                 ORDER BY finished_at DESC, id DESC LIMIT 1
+              )`,
+          )
+          .bind(input.name, input.key, input.playerId),
+      ]);
     },
 
     async deletePlayer(playerId: number): Promise<void> {
@@ -285,45 +323,41 @@ export function d1Repo(db: D1Database): Repo {
     },
 
     async topPlayers(limit: number): Promise<readonly BoardRow[]> {
-      // `best_game_id IS NOT NULL` is implied by `best_score > 0` — a score is
-      // only raised alongside the id that reached it — but it is stated so the
-      // narrowing to a non-null `gameId` below is true by the query, not by
-      // trust in that invariant.
+      // The global board is the best game per `(player, name)` (ADR 0029), read
+      // from `games` so a rename cannot relabel a past entry — see BOARD_ENTRIES.
       const result = await db
         .prepare(
-          `SELECT id, name, best_score, best_game_id FROM players
-            WHERE name_key IS NOT NULL AND best_score > 0 AND best_game_id IS NOT NULL
-            ORDER BY best_score DESC, name ASC, id ASC
+          `${BOARD_ENTRIES}
+            ORDER BY best_score DESC, name ASC, player_id ASC
             LIMIT ?1`,
         )
         .bind(limit)
         .all();
       return result.results.map((row) => ({
-        playerId: num(row, "id"),
+        playerId: num(row, "player_id"),
         name: text(row, "name"),
         bestScore: num(row, "best_score"),
-        gameId: text(row, "best_game_id"),
+        gameId: text(row, "game_id"),
       }));
     },
 
     async topPlayersBySeed(seed: number, limit: number): Promise<readonly BoardRow[]> {
-      // Top game per player on this seed, then the players in board order. The
-      // window picks one row per player under `total_score DESC, id ASC`, so a
-      // player's own ties break deterministically and `game_id` is the game that
-      // actually reached the score — not `best_game_id`, which is a global fact.
-      // The outer order ends in `player_id`, the same total order the global
-      // board gained when names stopped being unique (ADR 0024 on main).
+      // The same entry shape as the global board, filtered to one seed and
+      // *including* challenge games (ADR 0026) — the open game that originated the
+      // seed competes on it too. The name is the game's own snapshot (`g.name`,
+      // ADR 0029), so a rename does not relabel a seed entry either. One row per
+      // `(player, name)`, ties broken by `total_score DESC, g.id ASC`.
       const result = await db
         .prepare(
           `SELECT player_id, name, best_score, game_id FROM (
-             SELECT g.player_id AS player_id, p.name AS name,
+             SELECT g.player_id AS player_id, g.name AS name,
                     g.total_score AS best_score, g.id AS game_id,
                     ROW_NUMBER() OVER (
-                      PARTITION BY g.player_id ORDER BY g.total_score DESC, g.id ASC
+                      PARTITION BY g.player_id, g.name_key ORDER BY g.total_score DESC, g.id ASC
                     ) AS rn
-               FROM games g JOIN players p ON p.id = g.player_id
+               FROM games g
               WHERE g.seed = ?1 AND g.status = 'finished' AND g.flags = 0
-                AND p.name_key IS NOT NULL
+                AND g.name_key IS NOT NULL AND g.total_score > 0
            )
            WHERE rn = 1
            ORDER BY best_score DESC, name ASC, player_id ASC
@@ -340,12 +374,15 @@ export function d1Repo(db: D1Database): Repo {
     },
 
     countPlayersAbove(key: RankKey): Promise<number> {
+      // Rank against the same entry set the board is drawn from (ADR 0029), so a
+      // counted rank and a board position cannot disagree. `key` is the entry
+      // being ranked: its score, the name its best game was played under, and the
+      // player id as the final tiebreak — the outer order of BOARD_ENTRIES.
       return count(
-        `SELECT COUNT(*) AS n FROM players
-          WHERE name_key IS NOT NULL AND best_score > 0
-            AND (best_score > ?1
-                 OR (best_score = ?1 AND name < ?2)
-                 OR (best_score = ?1 AND name = ?2 AND id < ?3))`,
+        `SELECT COUNT(*) AS n FROM (${BOARD_ENTRIES})
+          WHERE best_score > ?1
+             OR (best_score = ?1 AND name < ?2)
+             OR (best_score = ?1 AND name = ?2 AND player_id < ?3)`,
         key.bestScore,
         key.name,
         key.id,

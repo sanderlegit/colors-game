@@ -25,15 +25,25 @@
 
 import type { Handler, RequestContext } from "../context";
 import { jsonResponse, noContent } from "../http/json";
-import { currentPlayer, rankOf } from "../identity";
+import { bestGameName, currentPlayer, rankOf } from "../identity";
 
 /** On the board only with a name and a score, which is the partial index's rule. */
 async function rankFor(
   context: RequestContext,
-  player: { readonly id: number; readonly name: string | null; readonly bestScore: number },
+  player: {
+    readonly id: number;
+    readonly name: string | null;
+    readonly bestScore: number;
+    readonly bestGameId: string | null;
+  },
 ): Promise<number | null> {
   if (player.name === null || player.bestScore <= 0) return null;
-  return rankOf(context, player.bestScore, player.name, player.id);
+  return rankOf(
+    context,
+    player.bestScore,
+    await bestGameName(context, player.bestGameId),
+    player.id,
+  );
 }
 
 export const getMe: Handler = async (context: RequestContext): Promise<Response> => {

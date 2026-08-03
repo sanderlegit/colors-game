@@ -33,15 +33,26 @@ export const REQUIRED_TABLES = [
 ];
 
 /**
- * The board, in the order the `players_board` index holds it.
+ * The board, drawn from `games` — the best open, unflagged, named game per
+ * `(player, name)` (ADR 0029), the same entry set the Worker's `topPlayers`
+ * serves. It reads the game's snapshotted name, not `players.name`, so the
+ * drill verifies the surface a player actually sees.
  *
  * Hashed rather than compared row by row, so the manifest stays small — and
  * taken over the *ordered* rows, because the order is as much a part of a
  * leaderboard as the numbers on it.
  */
-export const LEADERBOARD_QUERY = `SELECT name, best_score FROM players
-   WHERE name_key IS NOT NULL AND best_score > 0
-   ORDER BY best_score DESC, name ASC`;
+export const LEADERBOARD_QUERY = `SELECT name, best_score FROM (
+     SELECT g.player_id AS player_id, g.name AS name, g.total_score AS best_score,
+            ROW_NUMBER() OVER (
+              PARTITION BY g.player_id, g.name_key ORDER BY g.total_score DESC, g.id ASC
+            ) AS rn
+       FROM games g
+      WHERE g.status = 'finished' AND g.flags = 0 AND g.kind = 'open'
+        AND g.name_key IS NOT NULL AND g.total_score > 0
+   )
+   WHERE rn = 1
+   ORDER BY best_score DESC, name ASC, player_id ASC`;
 
 export function fail(message) {
   process.stderr.write(`${message}\n`);

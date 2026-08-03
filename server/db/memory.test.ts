@@ -33,6 +33,8 @@ async function ranked(repo: Repo, hash: string, name: string, score: number): Pr
   const id = await withPlayer(repo, hash);
   await repo.setName({ playerId: id, name, key: name.toLowerCase(), at: T0 });
   await repo.insertGame(newGame(`g-${hash}`));
+  // The name is stamped on the game — that is what the board reads (ADR 0029),
+  // not the identity's `setName` above, which is only the prefill default.
   await repo.finishGame({
     gameId: `g-${hash}`,
     playerId: id,
@@ -40,8 +42,8 @@ async function ranked(repo: Repo, hash: string, name: string, score: number): Pr
     guessesJson: "[]",
     flags: 0,
     finishedAt: T0,
-    name: null,
-    nameKey: null,
+    name,
+    nameKey: name.toLowerCase(),
   });
   await repo.recordFinishedGame({
     playerId: id,
@@ -518,6 +520,80 @@ describe("the board", () => {
       { playerId: id, name: "Ada", bestScore: 400, gameId: "g-h1" },
     ]);
   });
+
+  it("naming claims the game the player just finished (ADR 0029)", async () => {
+    // The play-then-name flow: a nameless finished game is off the board until a
+    // name is set, which stamps that game — not the mutable identity.
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    await repo.insertGame(newGame("g1"));
+    await repo.finishGame({
+      gameId: "g1",
+      playerId: id,
+      totalScore: 400,
+      guessesJson: "[]",
+      flags: 0,
+      finishedAt: T0,
+      name: null,
+      nameKey: null,
+    });
+    expect(await repo.topPlayers(10)).toEqual([]);
+    await repo.setName({ playerId: id, name: "Ada", key: "ada", at: T0 + 1 });
+    expect((await repo.topPlayers(10)).map((row) => row.name)).toEqual(["Ada"]);
+  });
+
+  it("naming again labels only the latest game, leaving older entries (ADR 0029)", async () => {
+    // The fix for the reported bug: an older game keeps the name it was played
+    // under; only the most recent game moves. A rename cannot rewrite the board.
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    for (const [gameId, score, at] of [
+      ["old", 400, T0],
+      ["new", 300, T0 + 1000],
+    ] as const) {
+      await repo.insertGame(newGame(gameId));
+      await repo.finishGame({
+        gameId,
+        playerId: id,
+        totalScore: score,
+        guessesJson: "[]",
+        flags: 0,
+        finishedAt: at,
+        name: "Ada",
+        nameKey: "ada",
+      });
+    }
+    await repo.setName({ playerId: id, name: "Grace", key: "grace", at: T0 + 2000 });
+    const board = await repo.topPlayers(10);
+    expect(board.map((row) => `${row.name}:${row.gameId}`)).toEqual(["Ada:old", "Grace:new"]);
+  });
+
+  it("one identity that played under two names holds two entries (the shared device)", async () => {
+    // Two people on one phone (one cookie, one player) submit under their own
+    // names. Each name is a separate `(player, name)` entry, so both appear —
+    // where the old per-identity board collapsed them into the latest name.
+    const repo = memoryRepo();
+    const id = await withPlayer(repo, "h1");
+    for (const [gameId, name, score] of [
+      ["g-alice", "Alice", 300],
+      ["g-bob", "Bob", 460],
+    ] as const) {
+      await repo.insertGame(newGame(gameId));
+      await repo.finishGame({
+        gameId,
+        playerId: id,
+        totalScore: score,
+        guessesJson: "[]",
+        flags: 0,
+        finishedAt: T0,
+        name,
+        nameKey: name.toLowerCase(),
+      });
+    }
+    const board = await repo.topPlayers(10);
+    expect(board.map((row) => row.name)).toEqual(["Bob", "Alice"]);
+    expect(board.map((row) => row.gameId)).toEqual(["g-bob", "g-alice"]);
+  });
 });
 
 describe("the per-seed board (ADR 0026)", () => {
@@ -541,8 +617,8 @@ describe("the per-seed board (ADR 0026)", () => {
       guessesJson: "[]",
       flags: 0,
       finishedAt: T0,
-      name: null,
-      nameKey: null,
+      name,
+      nameKey: name.toLowerCase(),
     });
     return gameId;
   }
@@ -572,8 +648,8 @@ describe("the per-seed board (ADR 0026)", () => {
         guessesJson: "[]",
         flags: 0,
         finishedAt: T0,
-        name: null,
-        nameKey: null,
+        name: "Ada",
+        nameKey: "ada",
       });
     }
     expect(await repo.topPlayersBySeed(55, 10)).toEqual([
@@ -594,8 +670,8 @@ describe("the per-seed board (ADR 0026)", () => {
       guessesJson: "[]",
       flags: 1,
       finishedAt: T0,
-      name: null,
-      nameKey: null,
+      name: "Cheat",
+      nameKey: "cheat",
     });
     // Unnamed: played the seed but has no name to show.
     const nameless = await withPlayer(repo, "h2");

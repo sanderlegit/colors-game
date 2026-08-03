@@ -68,7 +68,7 @@ src/
                       picker on phones (ADR 0027). Replaced preview.ts, deleted
     menu.ts           idle + summary screen; owns the identity block's mount slot
     breakdown.ts      per-round chips + "Round N (ΔE …)"; shared by menu + attempt
-    identity.ts       set-username + "Change name" rename form (ADR 0011, 0024, 0025)
+    identity.ts       set-username + "Change name" rename form (ADR 0011, 0024, 0025, 0029)
     leaderboard.ts    the board. setView/setAttempt, never update(state) (ADR 0012, 0026)
     attempt.ts        the panel a board row expands into (ADR 0026)
     tabs.ts           ARIA tablist, roving tabindex, automatic activation
@@ -361,9 +361,8 @@ Endpoints (all under `/api`, all same-origin, all `Cache-Control: no-store`):
 | POST | `/games` | 201 `{gameId, seed, roundsTotal}`. Body may carry `challengeOf` — an existing game whose seed to play; the result is a `challenge` (ADR 0026) |
 | POST | `/games/:gameId/result` | 200 the scored submission |
 | GET | `/games/:gameId/attempt` | 200 `{totalScore, rounds[]}` — a finished game replayed with its colours, for the board's expandable row (ADR 0026). Public; no seed |
-| POST | `/name` | 200 `{name}` |
-| DELETE | `/me` | 204, plus the clearing cookie |
-| GET | `/leaderboard` | 200 `{entries[]}`. `?forGame=<gameId>` returns that game's seed's board; each entry carries `gameId` |
+| POST | `/name` | 200 `{name}`. Stamps the name on the just-played game and the identity prefill (ADR 0029) |
+| GET | `/leaderboard` | 200 `{entries[]}` — best game per `(player, name)`, labelled by the game's snapshotted `name` (ADR 0029), never `players.name`. `?forGame=<gameId>` returns that game's seed's board; each entry carries `gameId` |
 | POST | `/client-error` | 204. Browser exceptions, deduplicated by `hash(message + stack)` |
 
 `gameId` is 32 bytes of base64url and *is* the single-use submit token:
@@ -379,8 +378,11 @@ three are asserted in `server/**/*.test.ts`:
   from the submit body. `memorize_ms` in particular sets the minimum-playtime
   threshold (ADR 0015). Since ADR 0026, `games.kind` (`open` | `challenge`) is
   read the same way: a `challenge` game replayed a seed *chosen* from another
-  game, so it never raises `players.best_score` — the segregation that keeps
-  chosen seeds off the global board. `submit.ts` reads `kind`, not the request.
+  game. Since ADR 0029 the global board is drawn from `games` filtered to
+  `kind = 'open'` (best game per `(player, name_key)`, labelled by the game's own
+  `name`), so a chosen seed stays off it *directly* rather than via
+  `players.best_score` — which `submit.ts` still writes but nothing reads for
+  ranking. `submit.ts` reads `kind`, not the request.
 - **`meta.changes === 0` is not an error.** A second submission of a game the same
   player already finished replays the stored result from `seed` + `guesses_json`
   and answers 200, because a dropped response is indistinguishable from a lost

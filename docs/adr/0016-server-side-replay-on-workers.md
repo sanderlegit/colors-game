@@ -2,6 +2,13 @@
 
 Date: 2026-08-02 · Status: accepted — **platform choice superseded in part by [0022](0022-workers-with-static-assets.md)**
 
+> **A second stored input is added to `games` by [0029](0029-names-are-snapshotted-per-game.md).**
+> The "guesses are the sole irreducible input" line below gains one exception: the
+> display name is snapshotted onto each game as a non-derived label. It never
+> enters `scoreGuess` or `generateTarget` and `server/replay.ts` never reads it,
+> so a score is still never re-derived from it and the replay determinism decided
+> here is untouched.
+
 ## Context
 
 ARCHITECTURE.md has carried this limitation since the first build:

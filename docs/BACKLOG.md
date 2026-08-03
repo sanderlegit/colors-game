@@ -194,14 +194,26 @@ exist, and `games.flags` has two defined bits. What is left:
   deletes every row for a day that is over, bounded at 500 a run. This was a
   privacy gap rather than a disk one — they are the only per-IP-derived rows in
   the system and ADR 0015 justifies them partly on being short-lived.
-- **The board tiebreak is name, not "first to achieve".** `players` stores no
-  timestamp for the best game, only `best_game_id`, and `players_board` is
-  `(best_score DESC, name)`. A `finished_at` tiebreak would need a join on every
-  rank query and would disagree with the index. To change it, add
-  `best_finished_at` to `players` and update the index, `topPlayers` and
-  `countPlayersAbove` in one commit. See `server/db/repo.ts`.
+- **The name-snapshot rollout is mid-flight — the *contract* step is not done.**
+  ADR 0029 staged the display-name rework as expand → reader flip → contract.
+  **Expand** ✅ (migration `0006`: `games.name` / `games.name_key`, stamped at
+  submit, existing rows backfilled) and the **reader flip** ✅ (the board and
+  `rankOf` read `games`; a rename relabels only the most-recent game) are done.
+  The **contract** is open: `players_board` and `players.best_score` are now
+  vestigial *for the board* — `submit` still writes `best_score`, nothing reads it
+  for ranking — and the follow-up is to drop the `players_board` index and remove
+  `best_score`'s board role once nothing depends on them. `best_score`'s
+  personal-best role (the `isPersonalBest` flag) is separate and stays.
+- **The board tiebreak is name, then `player_id`, not "first to achieve".** Since
+  ADR 0029 the global and per-seed boards read game entries — best game per
+  `(player, name_key)`, ordered `(total_score DESC, name ASC, player_id ASC)` —
+  so `player_id` breaks a same-name, same-score tie by account age, not by who got
+  there first. A `finished_at` tiebreak is newly cheap (the entry *is* a game row
+  with a `finished_at`), but it would still have to join the outer order in
+  `BOARD_ENTRIES`, `topPlayersBySeed` and `countPlayersAbove` in one commit to keep
+  the rank/row agreement. See `server/db/d1.ts`.
 - **No name-change policy exists.** `players.name_changes` and `name_changed_at`
-  are written on every claim and nothing reads them, so a player can rename as
+  are written on every name set and nothing reads them, so a player can rename as
   often as they like. ADR 0015 decided the mint and start limits and deliberately
   left this one open.
 - **~~Nothing sweeps stale `active` games.~~** Closed by ADR 0023. The daily cron
