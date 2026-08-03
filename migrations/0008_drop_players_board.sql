@@ -1,0 +1,21 @@
+-- The CONTRACT step of the name-snapshot rework (ADR 0029), safe now that the
+-- reader flip is deployed and proven. Apply with:
+--   npx wrangler d1 migrations apply colors --local     (dev)
+--   npx wrangler d1 migrations apply colors --remote    (production, via CI)
+--
+-- ## Why `players_board` goes
+--
+-- It indexed `players(best_score DESC, name, id)` for the old board, which read
+-- the leaderboard straight off the `players` row. Since ADR 0029 the board and
+-- the rank count both read `games` (the `games_name_board` index), and no query
+-- orders `players` by score any more — so this index is dead weight on every
+-- write to `players`.
+--
+-- Expand-only safety (OPERATIONS § 3): dropping an index cannot break a query on
+-- the Worker that is live when it runs — the current Worker never uses it, and
+-- even a rollback to a pre-0029 Worker would only lose the index's *speed*, not
+-- its correctness (SQLite scans instead). `best_score` and `best_game_id` are
+-- deliberately KEPT: they still back `/api/me` and the rank's best-game lookup
+-- (`bestGameName`), so they are not vestigial and are not dropped here.
+
+DROP INDEX players_board;

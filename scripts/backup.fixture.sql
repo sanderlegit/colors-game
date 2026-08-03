@@ -22,13 +22,14 @@ CREATE TABLE IF NOT EXISTS "d1_migrations"(
 		name       TEXT UNIQUE,
 		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-03 14:24:43');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-03 14:24:43');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(3,'0003_duplicate_names.sql','2026-08-03 14:24:44');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(4,'0004_challenge.sql','2026-08-03 14:24:44');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(5,'0005_reset_leaderboard.sql','2026-08-03 14:24:44');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(6,'0006_game_name_snapshot.sql','2026-08-03 14:24:44');
-INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(7,'0007_name_change_audit.sql','2026-08-03 14:24:44');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(1,'0001_initial.sql','2026-08-03 14:33:29');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(2,'0002_telemetry.sql','2026-08-03 14:33:29');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(3,'0003_duplicate_names.sql','2026-08-03 14:33:30');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(4,'0004_challenge.sql','2026-08-03 14:33:30');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(5,'0005_reset_leaderboard.sql','2026-08-03 14:33:30');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(6,'0006_game_name_snapshot.sql','2026-08-03 14:33:30');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(7,'0007_name_change_audit.sql','2026-08-03 14:33:30');
+INSERT INTO "d1_migrations" ("id","name","applied_at") VALUES(8,'0008_drop_players_board.sql','2026-08-03 14:33:30');
 CREATE TABLE players (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   
@@ -123,15 +124,13 @@ CREATE TABLE name_changes_audit (
 INSERT INTO "name_changes_audit" ("player_id","at","old_name_key","new_name_key") VALUES(1,1754000000000,NULL,'ada');
 INSERT INTO "name_changes_audit" ("player_id","at","old_name_key","new_name_key") VALUES(2,1754000100000,NULL,'grace');
 DELETE FROM sqlite_sequence;
-INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',7);
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('d1_migrations',8);
 INSERT INTO "sqlite_sequence" ("name","seq") VALUES('players',3);
 CREATE INDEX players_idle ON players(last_seen_at);
 CREATE INDEX games_player_started ON games(player_id, started_at DESC);
 CREATE INDEX games_daily ON games(finished_at DESC) WHERE status = 'finished' AND flags = 0;
 CREATE INDEX games_sweep ON games(started_at) WHERE status = 'active';
 CREATE INDEX client_errors_day ON client_errors(day);
-CREATE INDEX players_board ON players(best_score DESC, name, id)
-  WHERE name_key IS NOT NULL AND best_score > 0;
 CREATE INDEX games_seed_board ON games(seed, total_score DESC)
   WHERE status = 'finished' AND flags = 0;
 CREATE INDEX games_name_board ON games(total_score DESC)

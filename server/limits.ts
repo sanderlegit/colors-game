@@ -90,7 +90,7 @@ export const CLIENT_ERROR_RETENTION_DAYS = 30;
  * increments `games_played` in the same request, so `games_played = 0` means the
  * request died between the two. Such a player owns nothing: they cannot hold a
  * name (`handlers/name.ts` refuses under one game played) and they are not on the
- * board (`players_board` requires `best_score > 0`). Seven days is ADR 0011's
+ * board (which reads named games, ADR 0029, and they have none). Seven days is ADR 0011's
  * number and is far longer than the gap it is cleaning up after.
  */
 export const ORPHAN_PLAYER_MAX_AGE_MS = 7 * DAY_MS;
